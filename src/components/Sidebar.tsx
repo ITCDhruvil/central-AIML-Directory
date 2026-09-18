@@ -22,13 +22,12 @@ const NAV_LINKS = [
   { href: "/insights", label: "Insights", icon: Sparkles, shortcut: "4" },
 ] as const;
 
-function BrandMark({ size }: { size: "sm" | "md" | "lg" }) {
+function BrandMark({ size }: { size: "md" | "lg" }) {
   return (
     <span
       aria-hidden
       className={cn(
         "inline-block shrink-0 rounded-full bg-orange-600 shadow-[inset_0_1px_1px_rgba(255,255,255,0.28)]",
-        size === "sm" && "h-7 w-7",
         size === "md" && "h-8 w-8",
         size === "lg" && "h-9 w-9",
       )}
