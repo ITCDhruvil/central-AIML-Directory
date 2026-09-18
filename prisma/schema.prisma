@@ -1,0 +1,162 @@
+// Prisma schema — Project data model (Phase 1)
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Project {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  // ProjectType: PROJECT | POC | EXPERIMENT | TOOL | OTHER
+  type String
+  // ProjectStatus: ACTIVE | COMPLETED | ON_HOLD | ARCHIVED
+  status String
+  // ProjectStage: IDEA | POC | DEVELOPMENT | TESTING | PRODUCTION | ARCHIVED
+  // Nullable — existing projects stay unset until edited; new projects default to IDEA in app code.
+  stage String?
+  // Free-text project owner (not GitHub repo owner; no auth/user system).
+  owner String?
+
+  githubUrl     String?
+  githubOwner   String?
+  githubRepo    String?
+  defaultBranch String?
+
+  // JSON-encoded string arrays (SQLite has no native scalar-list/enum support)
+  technologies   String @default("[]")
+  tags           String @default("[]")
+  deploymentUrls String @default("[]")
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastSyncedAt DateTime?
+
+  documentation Documentation[]
+  activities    ProjectActivity[]
+
+  @@index([status])
+  @@index([type])
+}
+
+model Idea {
+  id          String  @id @default(cuid())
+  name        String
+  slug        String  @unique
+  description String?
+
+  // IdeaStatus: ACTIVE | ON_HOLD | PROMOTED | ARCHIVED
+  status String @default("ACTIVE")
+  // Free-text idea owner (no auth/user system — same convention as Project.owner).
+  owner String?
+
+  // JSON-encoded string arrays (SQLite has no native scalar-list/enum support)
+  technologies String @default("[]")
+  tags         String @default("[]")
+
+  // Set once this idea is promoted into a real Project — see promoteIdeaToProject().
+  // Plain string, not a formal relation, matching the loose-coupling style used
+  // elsewhere in this schema (e.g. Project.githubOwner/githubRepo).
+  promotedProjectId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+}
+
+// Reusable owner names for project/idea forms (free-text, no auth/user system).
+model Owner {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model ProjectActivity {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // ProjectActivityType: PROJECT_CREATED | PROJECT_UPDATED | GITHUB_SYNCED | DOCUMENTATION_UPDATED | DEPLOYMENT_UPDATED
+  type  String
+  title String
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+model Documentation {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  title    String
+  // DocumentCategory: README | SETUP | ARCHITECTURE | PRD | PLAN | AI_RULES | DESIGN | OTHER
+  category String
+  filePath String
+  content  String
+  source   String @default("github")
+
+  // sha256 of the pristine (pre-user-edit) generated content — only set for
+  // source="generated" docs. Used by sync to detect whether the user has
+  // manually edited a generated setup guide since it was last (re)generated.
+  generatedFromContentHash String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, filePath])
+  @@index([projectId])
+}
+
+// Directory-wide ("catalog") or per-project AI suggestions. Regenerating updates
+// matching cards in place (see insightFingerprint) and may add new ones.
+model Insight {
+  id          String @id @default(cuid())
+  // "catalog" for the Insights page, or a Project.id for Suggest Improvements.
+  scope       String
+  fingerprint String
+
+  // Suggestion type: new_idea | improvement
+  type               String
+  title              String
+  reasoning          String
+  suggestedTool      String?
+  relatedProjectName String?
+  // JSON-encoded string[]
+  sourceUrls         String  @default("[]")
+  savedAsIdea        Boolean @default(false)
+  // Last merge result for this card: added | updated | unchanged | null (not in last run)
+  lastChange         String?
+
+  firstGeneratedAt DateTime @default(now())
+  lastGeneratedAt  DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([scope, fingerprint])
+  @@index([scope, lastGeneratedAt])
+}
+
+model InsightGeneration {
+  id             String   @id @default(cuid())
+  scope          String
+  generatedAt    DateTime @default(now())
+  addedCount     Int
+  updatedCount   Int
+  unchangedCount Int
+  // JSON-encoded string[]
+  addedTitles    String   @default("[]")
+  updatedTitles  String   @default("[]")
+
+  @@index([scope, generatedAt])
+}

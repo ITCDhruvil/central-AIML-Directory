@@ -1,0 +1,8 @@
+.agents
+.claude
+.windsurf
+.sqlite-export.json
+scripts
+dev.db
+.env*
+!.env.example
