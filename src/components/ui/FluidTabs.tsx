@@ -32,7 +32,7 @@ export function FluidTabs({ tabs, defaultActive = tabs[0]?.id, onChange, trailin
   }
 
   return (
-    <div className={cn(FLUID_TAB_TRACK, trailing && "w-full")}>
+    <div className={cn(FLUID_TAB_TRACK, trailing ? "w-full" : undefined)}>
       {tabs.map((tab) => {
         const isActive = active === tab.id;
 
