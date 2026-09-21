@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Chatbot } from "@/components/Chatbot";
+import { ChatbotProvider } from "@/components/ChatbotContext";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
 import { cn } from "@/lib/cn";
@@ -41,34 +42,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-zinc-100 font-sans dark:bg-zinc-950">
-      <TopBar onOpenMenu={() => setMobileOpen(true)} />
-      <div className="relative flex min-h-0 flex-1 gap-2 p-0 sm:p-2.5">
-        {mobileOpen && (
-          <button
-            type="button"
-            aria-label="Close menu"
-            className="fixed inset-0 z-40 bg-zinc-950/20 sm:hidden"
-            onClick={() => setMobileOpen(false)}
-          />
-        )}
-
-        <div
-          className={cn(
-            "z-50 h-full",
-            mobileOpen ? "fixed inset-y-2 left-2 sm:static sm:inset-auto" : "hidden sm:flex",
+    <ChatbotProvider>
+      <div className="flex h-screen flex-col overflow-hidden bg-zinc-100 font-sans dark:bg-zinc-950">
+        <TopBar onOpenMenu={() => setMobileOpen(true)} />
+        <div className="relative flex min-h-0 flex-1 gap-2 p-0 sm:p-2.5">
+          {mobileOpen && (
+            <button
+              type="button"
+              aria-label="Close menu"
+              className="fixed inset-0 z-40 bg-zinc-950/20 sm:hidden"
+              onClick={() => setMobileOpen(false)}
+            />
           )}
-        >
-          <Sidebar
-            collapsed={mobileOpen ? false : collapsed}
-            onToggle={mobileOpen ? () => setMobileOpen(false) : toggleCollapsed}
-            onNavigate={() => setMobileOpen(false)}
-          />
-        </div>
 
-        <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-7">{children}</main>
+          <div
+            className={cn(
+              "z-50 h-full",
+              mobileOpen ? "fixed inset-y-2 left-2 sm:static sm:inset-auto" : "hidden sm:flex",
+            )}
+          >
+            <Sidebar
+              collapsed={mobileOpen ? false : collapsed}
+              onToggle={mobileOpen ? () => setMobileOpen(false) : toggleCollapsed}
+              onNavigate={() => setMobileOpen(false)}
+            />
+          </div>
+
+          <main className="min-w-0 flex-1 overflow-y-auto px-4 py-6 sm:px-8 sm:py-7 has-[.page-lock]:flex has-[.page-lock]:min-h-0 has-[.page-lock]:flex-col has-[.page-lock]:overflow-hidden">
+            {children}
+          </main>
+        </div>
+        <Chatbot />
       </div>
-      <Chatbot />
-    </div>
+    </ChatbotProvider>
   );
 }

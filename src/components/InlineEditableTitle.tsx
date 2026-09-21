@@ -3,10 +3,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Pencil, X } from "lucide-react";
+import { cn } from "@/lib/cn";
 import type { Project, ProjectInput } from "@/types/project";
 
 /** Click the project name to rename it in place — no trip to the Edit page, matching Jira's inline title edit. */
-export function InlineEditableTitle({ project }: { project: Project }) {
+export function InlineEditableTitle({ project, className }: { project: Project; className?: string }) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(project.name);
@@ -100,7 +101,10 @@ export function InlineEditableTitle({ project }: { project: Project }) {
               }
             }}
             disabled={saving}
-            className="-mx-1 rounded-md border border-orange-400 bg-white px-1 py-0.5 text-xl font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-500/40 disabled:opacity-60 dark:bg-zinc-900 dark:text-zinc-100"
+            className={cn(
+              "-mx-1 rounded-md border border-orange-400 bg-white px-1 py-0.5 font-semibold text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-500/40 disabled:opacity-60 dark:bg-zinc-900 dark:text-zinc-100",
+              className ?? "text-xl",
+            )}
           />
           <button
             type="button"
@@ -135,7 +139,7 @@ export function InlineEditableTitle({ project }: { project: Project }) {
       title="Click to rename"
       className="group -mx-1 flex items-center gap-1.5 rounded-md px-1 py-0.5 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
     >
-      <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">{project.name}</h1>
+      <h1 className={cn("font-semibold text-zinc-900 dark:text-zinc-100", className ?? "text-xl")}>{project.name}</h1>
       <Pencil size={14} className="shrink-0 text-zinc-300 opacity-0 group-hover:opacity-100 dark:text-zinc-600" />
     </button>
   );

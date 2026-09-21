@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChevronDown, Loader2, Sparkles } from "lucide-react";
 import { InsightCard } from "@/components/InsightCard";
 import { formatCardDateTime } from "@/components/ContentCard";
@@ -71,6 +71,13 @@ export function InsightsBoard({
   const [ledgerEpoch, setLedgerEpoch] = useState(0);
 
   const { insights, generation } = snapshot;
+
+  useEffect(() => {
+    const hash = window.location.hash.slice(1);
+    if (!hash) return;
+    document.getElementById(hash)?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [insights]);
+
   const improvements = insights.filter((insight) => insight.type === "improvement");
   const newIdeas = insights.filter((insight) => insight.type === "new_idea");
   const hasInsights = insights.length > 0;

@@ -15,6 +15,11 @@ export function insightScope(projectId?: string | null): string {
 
 export class InsightNotFoundError extends Error {}
 
+export async function getInsightById(id: string): Promise<Insight | null> {
+  const row = await prisma.insight.findUnique({ where: { id } });
+  return row ? toInsight(row) : null;
+}
+
 export async function getInsightSnapshot(scope: string): Promise<InsightSnapshot> {
   const [rows, generation] = await Promise.all([
     prisma.insight.findMany({

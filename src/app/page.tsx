@@ -1,35 +1,61 @@
 import { Suspense } from "react";
-import { Plus } from "lucide-react";
+import { Lightbulb, Plus } from "lucide-react";
 import { ProjectExplorer } from "@/components/ProjectExplorer";
-import { CatalogPulse } from "@/components/CatalogPulse";
+import { WorkspacePulse } from "@/components/WorkspacePulse";
+import { DashboardFeed } from "@/components/DashboardFeed";
 import { SkeletonCardGrid } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { listProjects } from "@/lib/projects";
+import { listIdeas } from "@/lib/ideas";
+import { CATALOG_INSIGHT_SCOPE, getInsightSnapshot } from "@/lib/insightCatalog";
 import { portfolioSnapshot } from "@/lib/portfolioSnapshot";
+import { ideasSnapshot, insightsPulse, takeRecent } from "@/lib/workspaceSnapshot";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
-  const projects = await listProjects();
-  const snapshot = portfolioSnapshot(projects);
+  const [projects, ideas, insightSnap] = await Promise.all([
+    listProjects(),
+    listIdeas(),
+    getInsightSnapshot(CATALOG_INSIGHT_SCOPE),
+  ]);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Project Portfolio</h1>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">The AIML work currently in this directory.</p>
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Dashboard</h1>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+            Projects, ideas, and insights currently in this directory.
+          </p>
         </div>
-        <Button href="/projects/new" variant="primary" icon={Plus}>
-          New Project
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button href="/ideas/new" variant="secondary" icon={Lightbulb}>
+            New Idea
+          </Button>
+          <Button href="/projects/new" variant="primary" icon={Plus}>
+            New Project
+          </Button>
+        </div>
       </div>
 
-      <CatalogPulse snapshot={snapshot} />
+      <WorkspacePulse
+        projects={portfolioSnapshot(projects)}
+        ideas={ideasSnapshot(ideas)}
+        insights={insightsPulse(insightSnap)}
+      />
 
-      <Suspense fallback={<SkeletonCardGrid />}>
-        <ProjectExplorer initialProjects={projects} />
-      </Suspense>
+      <DashboardFeed
+        ideas={takeRecent(ideas, (idea) => idea.updatedAt)}
+        insights={takeRecent(insightSnap.insights, (insight) => insight.lastGeneratedAt)}
+      />
+
+      <div className="space-y-3">
+        <h2 className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Projects</h2>
+        <Suspense fallback={<SkeletonCardGrid />}>
+          <ProjectExplorer initialProjects={projects} />
+        </Suspense>
+      </div>
     </div>
   );
 }

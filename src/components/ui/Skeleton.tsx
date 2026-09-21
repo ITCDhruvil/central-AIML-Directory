@@ -31,3 +31,21 @@ export function SkeletonCardGrid({ count = 6 }: { count?: number }) {
     </div>
   );
 }
+
+/** Instant route fallback so clicks don't wait on a blank main pane. */
+export function PageSkeleton() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+      </div>
+      <div className="rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="mt-3 h-4 w-5/6" />
+        <Skeleton className="mt-3 h-4 w-2/3" />
+        <Skeleton className="mt-3 h-4 w-3/4" />
+      </div>
+    </div>
+  );
+}

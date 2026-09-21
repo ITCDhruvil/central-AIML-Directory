@@ -9,7 +9,7 @@ const MAX_TOOL_ITERATIONS = 6;
 
 /**
  * Runs one user turn of the chatbot to completion: sends the conversation to
- * the model, executes any tool calls it makes against the real project data,
+ * the model, executes any tool calls it makes against workspace data,
  * feeds the results back, and repeats until the model answers with plain
  * text (or the iteration cap is hit). Returns only the NEW messages produced
  * this turn (assistant tool-call messages, tool results, final reply) — the

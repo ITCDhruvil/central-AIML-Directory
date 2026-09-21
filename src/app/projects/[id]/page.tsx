@@ -4,7 +4,6 @@ import {
   Activity,
   AlertTriangle,
   AlignLeft,
-  ArrowLeft,
   BarChart3,
   CheckCircle2,
   ExternalLink,
@@ -13,7 +12,6 @@ import {
   Link2,
   Network,
   Plus,
-  Shield,
 } from "lucide-react";
 import { ActivityList } from "@/components/ActivityList";
 import { GithubIcon } from "@/components/icons/GithubIcon";
@@ -33,12 +31,14 @@ import { ProjectTypeIcon } from "@/components/ProjectTypeIcon";
 import { ProjectActions } from "@/components/ProjectActions";
 import { ProjectCardMenu } from "@/components/ProjectCardMenu";
 import { ProjectDetailTabs } from "@/components/ProjectDetailTabs";
+import { DismissibleInternalHint } from "@/components/DismissibleInternalHint";
 import { SuggestImprovementsPanel } from "@/components/SuggestImprovementsPanel";
 import { SyncGitHubPanel } from "@/components/SyncGitHubPanel";
 import { ProjectAssistant } from "@/components/ProjectAssistant";
 import { ProjectDetailsEditor } from "@/components/ProjectDetailsEditor";
 import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
+import { Breadcrumb1 } from "@/components/ui/breadcrumb-01";
 import { EmptyState } from "@/components/EmptyState";
 import { documentSourceLabel } from "@/lib/documentOwnership";
 import type { Documentation } from "@/types/documentation";
@@ -363,80 +363,80 @@ export default async function ProjectDetailPage({
       />
     );
 
-  return (
-    <div className="w-full space-y-5">
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-        <Link href="/projects" className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100">
-          <ArrowLeft size={14} />
-          Projects
-        </Link>
-        <span>/</span>
-        <span className="text-zinc-900 dark:text-zinc-100">{project.name}</span>
-      </div>
+  const detailsColumn = (
+    <>
+      <SectionCard icon={IdCard} title="Project Details">
+        <ProjectDetailsEditor project={project} />
+      </SectionCard>
 
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <ProjectTypeIcon technologies={project.technologies} size={48} />
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <InlineEditableTitle project={project} />
-              <ProjectTypeBadge type={project.type} />
-              <ProjectStatusBadge status={project.status} />
-              {hasInternalDeployment(project.deploymentUrls) && <InternalDeployBadge />}
+      <SectionCard icon={BarChart3} title="Tech Stack Summary">
+        <TechStackSummaryEditor project={project} />
+      </SectionCard>
+
+      <SectionCard icon={Network} title="Related Projects">
+        <div className="flex flex-col items-center gap-2 py-4 text-center">
+          <Network size={28} className="text-zinc-300 dark:text-zinc-700" />
+          <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">No related projects yet</p>
+          <p className="text-xs text-zinc-400">You can link related projects to keep everything organized.</p>
+          <Button variant="secondary" size="sm" icon={Plus} disabled title="Not available yet" className="mt-1">
+            Link Project
+          </Button>
+        </div>
+      </SectionCard>
+    </>
+  );
+
+  return (
+    <div className="page-lock flex h-full min-h-0 w-full flex-1 flex-col gap-5">
+      <div className="shrink-0 space-y-4">
+        <Breadcrumb1
+          segments={[
+            { label: "Projects", href: "/projects" },
+            { label: project.name, current: true },
+          ]}
+        />
+
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProjectTypeIcon technologies={project.technologies} size={48} />
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <InlineEditableTitle project={project} className="text-3xl leading-none sm:text-4xl" />
+                <ProjectTypeBadge type={project.type} />
+                <ProjectStatusBadge status={project.status} />
+                {hasInternalDeployment(project.deploymentUrls) && <InternalDeployBadge />}
+              </div>
             </div>
           </div>
-        </div>
-        <ProjectActions id={project.id} name={project.name} deploymentUrl={project.deploymentUrls[0] ?? null} />
-      </div>
-
-      {hasInternalDeployment(project.deploymentUrls) && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          <Shield size={16} className="mt-0.5 shrink-0" />
-          <p>This project is deployed on an internal server. You need VPN or remote access to open it.</p>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Main column — tabs switch which panel is mounted */}
-        <div className="lg:col-span-2">
-          <ProjectDetailTabs overview={overviewPanel} documentation={documentationPanel} askAi={askAiPanel} links={linksPanel} />
-        </div>
-
-        {/* Sidebar column — same on every tab, sticks in place and scrolls on its own once its content outgrows the viewport */}
-        <div className="space-y-5 lg:sticky lg:top-6 lg:self-start">
-          <SectionCard icon={IdCard} title="Project Details">
-            <ProjectDetailsEditor project={project} />
-          </SectionCard>
-
-          <SectionCard icon={BarChart3} title="Tech Stack Summary">
-            <TechStackSummaryEditor project={project} />
-          </SectionCard>
-
-          <SectionCard icon={Network} title="Related Projects">
-            <div className="flex flex-col items-center gap-2 py-4 text-center">
-              <Network size={28} className="text-zinc-300 dark:text-zinc-700" />
-              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">No related projects yet</p>
-              <p className="text-xs text-zinc-400">You can link related projects to keep everything organized.</p>
-              <Button variant="secondary" size="sm" icon={Plus} disabled title="Not available yet" className="mt-1">
-                Link Project
-              </Button>
+          {hasInternalDeployment(project.deploymentUrls) && (
+            <div className="ml-auto shrink-0">
+              <DismissibleInternalHint projectId={project.id} />
             </div>
-          </SectionCard>
+          )}
         </div>
       </div>
 
-      {/* Footer */}
-      <p className="text-xs text-zinc-400">
-        Created {formatDate(project.createdAt)} · Updated {formatDate(project.updatedAt)}
-        {isGithubConnected && (
-          <>
-            {" · "}
-            {project.lastSyncedAt ? `Synced ${formatRelativeTime(project.lastSyncedAt)}` : "Never synced"}
-          </>
-        )}
-      </p>
+      <ProjectDetailTabs
+        overview={overviewPanel}
+        documentation={documentationPanel}
+        askAi={askAiPanel}
+        links={linksPanel}
+        sidebar={detailsColumn}
+        actions={
+          <ProjectActions id={project.id} name={project.name} deploymentUrl={project.deploymentUrls[0] ?? null} />
+        }
+        footer={
+          <p className="text-xs text-zinc-400">
+            Created {formatDate(project.createdAt)} · Updated {formatDate(project.updatedAt)}
+            {isGithubConnected && (
+              <>
+                {" · "}
+                {project.lastSyncedAt ? `Synced ${formatRelativeTime(project.lastSyncedAt)}` : "Never synced"}
+              </>
+            )}
+          </p>
+        }
+      />
     </div>
   );
 }

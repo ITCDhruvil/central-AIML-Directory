@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
-import { AlignLeft, ArrowLeft, CalendarPlus, History, Lightbulb, Package, Rocket, User } from "lucide-react";
+import { AlignLeft, CalendarPlus, History, Lightbulb, Package, Rocket, User } from "lucide-react";
 import { getIdeaById } from "@/lib/ideas";
 import { IdeaStatusBadge } from "@/components/IdeaStatusBadge";
 import { IdeaActions } from "@/components/IdeaActions";
 import { MarkdownView } from "@/components/MarkdownView";
 import { Button, type IconType } from "@/components/ui/Button";
+import { Breadcrumb1 } from "@/components/ui/breadcrumb-01";
 import { formatDate } from "@/lib/formatDate";
 import { IDEA_STATUS_ICONS } from "@/lib/ideaOptionIcons";
 
@@ -43,14 +43,12 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
 
   return (
     <div className="w-full space-y-5">
-      <nav className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
-        <Link href="/ideas" className="flex items-center gap-1 hover:text-zinc-900 dark:hover:text-zinc-100">
-          <ArrowLeft size={14} />
-          Ideas
-        </Link>
-        <span>/</span>
-        <span className="truncate text-zinc-700 dark:text-zinc-300">{idea.name}</span>
-      </nav>
+      <Breadcrumb1
+        segments={[
+          { label: "Ideas", href: "/ideas" },
+          { label: idea.name, current: true },
+        ]}
+      />
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex items-center gap-3">

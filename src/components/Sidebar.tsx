@@ -12,7 +12,9 @@ import {
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
+import { ChatbotLaunchButton } from "@/components/ChatbotLaunchButton";
 import { GlobalSearch } from "@/components/GlobalSearch";
+import { LinkPendingHint } from "@/components/LinkPendingHint";
 import { cn } from "@/lib/cn";
 
 const NAV_LINKS = [
@@ -60,6 +62,7 @@ function NavItem({
   return (
     <Link
       href={href}
+      prefetch
       title={collapsed ? label : undefined}
       aria-current={active ? "page" : undefined}
       onClick={onNavigate}
@@ -73,6 +76,7 @@ function NavItem({
     >
       <Icon size={18} strokeWidth={1.75} className="shrink-0" />
       {!collapsed && <span className="min-w-0 flex-1 truncate">{label}</span>}
+      {!collapsed && <LinkPendingHint />}
       {collapsed && (
         <span className="pointer-events-none absolute left-full z-50 ml-2 hidden whitespace-nowrap rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white shadow-sm group-hover:block dark:bg-zinc-100 dark:text-zinc-900">
           {label}
@@ -172,6 +176,10 @@ export function Sidebar({
         ))}
 
         <div className="flex-1" />
+
+        <div className={cn("mb-2", collapsed ? "flex justify-center" : "px-0.5")}>
+          <ChatbotLaunchButton collapsed={collapsed} />
+        </div>
 
         <NavItem
           href="/settings"

@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAIConfig } from "@/lib/ai/config";
-import { callAssistantModelWithTools } from "@/lib/ai/client";
-import { generateInsights, InsightsResponseError } from "@/lib/ai/insights";
-import { INSIGHTS_TOOLS, INSIGHTS_TOOL_HANDLERS } from "@/lib/ai/insightsTools";
-import { buildInsightsContext, InsightsContextNotFoundError } from "@/lib/ai/insightsContext";
-import { buildInsightsUserMessage } from "@/lib/ai/insightsPrompts";
+import { InsightsResponseError } from "@/lib/ai/insights";
+import { InsightsContextNotFoundError } from "@/lib/ai/insightsContext";
+import { generateAndPersistInsights, InsightsNotConfiguredError } from "@/lib/ai/runInsights";
 import { AIProviderError } from "@/lib/ai/types";
-import { getLangSearchApiKey } from "@/lib/websearch/langsearch";
-import { getInsightSnapshot, insightScope, persistGeneratedInsights } from "@/lib/insightCatalog";
+import { getInsightSnapshot, insightScope } from "@/lib/insightCatalog";
 
 function extractProjectId(body: unknown): string | undefined {
   if (typeof body !== "object" || body === null) return undefined;
@@ -42,33 +38,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const config = getAIConfig();
-  if (!config) {
-    return NextResponse.json({ error: "AI is not configured. Set the AI API key to enable insights." }, { status: 503 });
-  }
-
   const projectId = extractProjectId(body);
-  const scope = insightScope(projectId);
 
   try {
-    const [context, current] = await Promise.all([
-      buildInsightsContext(projectId),
-      getInsightSnapshot(scope),
-    ]);
-    const userMessage = buildInsightsUserMessage(
-      context,
-      current.insights.map((insight) => ({
-        type: insight.type,
-        title: insight.title,
-        suggestedTool: insight.suggestedTool,
-        relatedProjectName: insight.relatedProjectName,
-      })),
-    );
-    const tools = getLangSearchApiKey() ? INSIGHTS_TOOLS : [];
-    const suggestions = await generateInsights(userMessage, config, callAssistantModelWithTools, tools, INSIGHTS_TOOL_HANDLERS);
-    const snapshot = await persistGeneratedInsights(scope, suggestions);
+    const snapshot = await generateAndPersistInsights(projectId);
     return NextResponse.json(snapshot);
   } catch (error) {
+    if (error instanceof InsightsNotConfiguredError) {
+      return NextResponse.json({ error: "AI is not configured. Set the AI API key to enable insights." }, { status: 503 });
+    }
     if (error instanceof InsightsContextNotFoundError) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }

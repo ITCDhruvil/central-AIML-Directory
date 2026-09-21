@@ -39,8 +39,16 @@ export async function getIdeaById(id: string): Promise<Idea | null> {
   return row ? toIdea(row) : null;
 }
 
+/** type/status-style defaults so a bare `{name}` is enough to create an idea, matching createProject. */
+function withCreateDefaults(rawInput: unknown): unknown {
+  if (typeof rawInput !== "object" || rawInput === null) return rawInput;
+  const data = { ...(rawInput as Record<string, unknown>) };
+  if (!data.status) data.status = "ACTIVE";
+  return data;
+}
+
 export async function createIdea(rawInput: unknown): Promise<Idea> {
-  const input = validateIdeaInput(rawInput);
+  const input = validateIdeaInput(withCreateDefaults(rawInput));
   const slug = await uniqueIdeaSlug(input.name);
 
   const row = await prisma.idea.create({

@@ -59,7 +59,10 @@ export function InsightCard({
   }
 
   return (
-    <article className="flex h-full flex-col rounded-lg border border-zinc-200/80 bg-white p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+    <article
+      id={`insight-${insight.id}`}
+      className="flex h-full flex-col scroll-mt-6 rounded-lg border border-zinc-200/80 bg-white p-1.5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
+    >
       <div className={cn("relative flex min-h-0 flex-1 flex-col rounded-md px-5 pb-5 pt-4", TONE_PANEL[insight.type])}>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="rounded-full bg-white/70 px-2.5 py-0.5 text-[11px] font-medium text-zinc-500 dark:bg-zinc-950/40 dark:text-zinc-300">
