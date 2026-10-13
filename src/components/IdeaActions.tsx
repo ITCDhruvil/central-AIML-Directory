@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Rocket, Trash2 } from "lucide-react";
+import { useCan } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -18,6 +19,9 @@ export function IdeaActions({
   promotedProjectId: string | null;
 }) {
   const router = useRouter();
+  const canEdit = useCan("ideas", "edit");
+  const canPromote = useCan("projects", "create") && canEdit;
+  const canDelete = useCan("ideas", "delete");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [promoting, setPromoting] = useState(false);
@@ -73,16 +77,22 @@ export function IdeaActions({
             </Button>
           )
         ) : (
-          <Button variant="primary" icon={Rocket} loading={promoting} onClick={handlePromote}>
-            {promoting ? "Promoting..." : "Promote to Project"}
+          canPromote && (
+            <Button variant="primary" icon={Rocket} loading={promoting} onClick={handlePromote}>
+              {promoting ? "Promoting..." : "Promote to Project"}
+            </Button>
+          )
+        )}
+        {canEdit && (
+          <Button href={`/ideas/${id}/edit`} variant="secondary" icon={Pencil}>
+            Edit
           </Button>
         )}
-        <Button href={`/ideas/${id}/edit`} variant="secondary" icon={Pencil}>
-          Edit
-        </Button>
-        <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
-          Delete
-        </Button>
+        {canDelete && (
+          <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
+            Delete
+          </Button>
+        )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <ConfirmDialog

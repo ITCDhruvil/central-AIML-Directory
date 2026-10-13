@@ -1,5 +1,6 @@
 import type { ChatCompletionMessage, ToolCallFn, ToolDefinition } from "@/lib/ai/chatTypes";
 import { CHATBOT_SYSTEM_PROMPT } from "@/lib/ai/chatbotPrompts";
+import { redactMessagesForModel } from "@/lib/ai/chatbotRedact";
 import { executeToolCall, type ToolHandler } from "@/lib/ai/toolLoop";
 import type { AIConfig } from "@/lib/ai/types";
 
@@ -24,8 +25,13 @@ export async function runChatbotTurn(
   callWithTools: ToolCallFn,
   tools: ToolDefinition[],
   handlers: Record<string, ToolHandler>,
+  systemPrompt: string = CHATBOT_SYSTEM_PROMPT,
 ): Promise<ChatCompletionMessage[]> {
-  const messages: ChatCompletionMessage[] = [{ role: "system", content: CHATBOT_SYSTEM_PROMPT }, ...history];
+  // The model never sees generated credentials; the browser gets them untouched in newMessages.
+  const messages: ChatCompletionMessage[] = [
+    { role: "system", content: systemPrompt },
+    ...redactMessagesForModel(history),
+  ];
   const newMessages: ChatCompletionMessage[] = [];
 
   for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
@@ -44,7 +50,7 @@ export async function runChatbotTurn(
         tool_call_id: call.id,
         content: JSON.stringify(result),
       };
-      messages.push(toolMessage);
+      messages.push(redactMessagesForModel([toolMessage])[0]);
       newMessages.push(toolMessage);
     }
   }

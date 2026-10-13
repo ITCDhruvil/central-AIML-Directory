@@ -1,3 +1,6 @@
+import { loadViewAccess, requirePagePermission } from "@/lib/auth/dal";
+import { can } from "@/lib/auth/permissions";
+import { NO_ACCESS } from "@/lib/auth/scope";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
@@ -9,9 +12,13 @@ import {
   ExternalLink,
   FileText,
   IdCard,
+  LayoutList,
   Link2,
   Network,
   Plus,
+  Sparkles,
+  Tag,
+  Users,
 } from "lucide-react";
 import { ActivityList } from "@/components/ActivityList";
 import { GithubIcon } from "@/components/icons/GithubIcon";
@@ -36,6 +43,8 @@ import { SuggestImprovementsPanel } from "@/components/SuggestImprovementsPanel"
 import { SyncGitHubPanel } from "@/components/SyncGitHubPanel";
 import { ProjectAssistant } from "@/components/ProjectAssistant";
 import { ProjectDetailsEditor } from "@/components/ProjectDetailsEditor";
+import { ProjectTeam } from "@/components/ProjectTeam";
+import { canManageProjectTeam } from "@/lib/projectTeamAccess";
 import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
 import { Breadcrumb1 } from "@/components/ui/breadcrumb-01";
@@ -43,6 +52,21 @@ import { EmptyState } from "@/components/EmptyState";
 import { documentSourceLabel } from "@/lib/documentOwnership";
 import type { Documentation } from "@/types/documentation";
 import type { ProjectActivity } from "@/types/project";
+
+const DETAIL_ROW = "grid grid-cols-1 gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-x-4";
+const DETAIL_LABEL = "flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400";
+
+function DetailRow({ icon: Icon, label, children }: { icon: IconType; label: string; children: React.ReactNode }) {
+  return (
+    <div className={DETAIL_ROW}>
+      <div className={DETAIL_LABEL}>
+        <Icon size={14} className="shrink-0 text-zinc-400" />
+        {label}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">{children}</div>
+    </div>
+  );
+}
 
 function SectionCard({
   icon: Icon,
@@ -140,15 +164,22 @@ export default async function ProjectDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { user, access } = await requirePagePermission("projects", "view");
   const { id } = await params;
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, access);
 
   if (!project) {
     notFound();
   }
 
+  const canEditProject = can(user.permissions, "projects", "edit");
+  const canManageTeam = await canManageProjectTeam(user, project);
+  const canCreateDocument = can(user.permissions, "documents", "create");
+  const canUseAssistant = can(user.permissions, "ai_project_assistant", "use");
+  const canViewDocuments = can(user.permissions, "documents", "view");
+  const documentAccess = canViewDocuments ? (await loadViewAccess(user)).documents : NO_ACCESS;
   const [documents, activities] = await Promise.all([
-    listDocumentation(project.id),
+    canViewDocuments ? listDocumentation(project.id, documentAccess) : Promise.resolve([]),
     listRecentProjectActivities(project.id, 200),
   ]);
   const attentionIssues = getNeedsAttentionIssues(project);
@@ -168,31 +199,32 @@ export default async function ProjectDetailPage({
       </SectionCard>
 
       <SectionCard
-        icon={GithubIcon}
+        icon={LayoutList}
         title="Overview"
         action={<ProjectCardMenu id={project.id} name={project.name} githubUrl={project.githubUrl} />}
       >
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
           {isGithubConnected ? (
-            <div className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-              <GithubIcon size={14} className="shrink-0 text-zinc-400" />
-              <span className="w-36 shrink-0 text-zinc-500 dark:text-zinc-400">GitHub Repository</span>
+            <DetailRow icon={GithubIcon} label="Repository">
               <Button href={project.githubUrl!} external icon={ExternalLink} variant="secondary" size="sm">
                 {project.githubOwner}/{project.githubRepo}
               </Button>
               {project.defaultBranch && (
-                <span className="text-xs text-zinc-400">default branch: {project.defaultBranch}</span>
+                <span className="rounded-md bg-zinc-100 px-2 py-1 text-xs text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  {project.defaultBranch}
+                </span>
               )}
-            </div>
+            </DetailRow>
           ) : (
-            <div className="flex items-center gap-2 py-2.5 text-sm text-zinc-400">
-              <GithubIcon size={14} className="shrink-0" />
-              GitHub not configured — use{" "}
-              <Link href={`/projects/${project.id}/edit`} className="underline hover:text-zinc-600 dark:hover:text-zinc-300">
-                Edit
-              </Link>{" "}
-              to connect a repository.
-            </div>
+            <DetailRow icon={GithubIcon} label="Repository">
+              <span className="text-sm text-zinc-400">
+                Not connected —{" "}
+                <Link href={`/projects/${project.id}/edit`} className="underline hover:text-zinc-600 dark:hover:text-zinc-300">
+                  edit this project
+                </Link>{" "}
+                to add a repository.
+              </span>
+            </DetailRow>
           )}
 
           {project.deploymentUrls.map((url) => {
@@ -204,35 +236,27 @@ export default async function ProjectDetailPage({
               // not a parseable URL — fall back to showing it as-is
             }
             // deploymentLabel() falls back to the hostname itself when it
-            // can't classify the URL (Local/Staging/UAT/Production/Dev) —
-            // skip the descriptor in that case so it doesn't just repeat
-            // the hostname shown in the button right next to it.
-            const showLabel = label !== hostname && label !== "Internal";
+            // can't classify the URL (Local/Staging/UAT/Production/Dev).
+            const rowLabel = label !== hostname && label !== "Internal" ? label : "Deployment";
             const internal = isInternalDeploymentUrl(url);
 
             return (
-              <div key={url} className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-                <Link2 size={14} className="shrink-0 text-zinc-400" />
-                {showLabel && <span className="w-36 shrink-0 text-zinc-500 dark:text-zinc-400">{label}</span>}
+              <DetailRow key={url} icon={Link2} label={rowLabel}>
                 <Button href={url} external icon={ExternalLink} variant="secondary" size="sm">
                   {hostname}
                 </Button>
-                <Button href={url} external variant="ghost" size="sm">
-                  Visit
-                </Button>
                 {internal && (
-                  <span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400">
                     <InternalDeployBadge />
                     {INTERNAL_ACCESS_HINT}
                   </span>
                 )}
-              </div>
+              </DetailRow>
             );
           })}
 
           {project.tags.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2 py-2.5 text-sm">
-              <span className="w-36 shrink-0 text-zinc-500 dark:text-zinc-400">Tags</span>
+            <DetailRow icon={Tag} label="Tags">
               <div className="flex flex-wrap gap-1.5">
                 {project.tags.map((tag) => (
                   <span
@@ -243,12 +267,14 @@ export default async function ProjectDetailPage({
                   </span>
                 ))}
               </div>
-            </div>
+            </DetailRow>
+          )}
+
+          {isGithubConnected && canEditProject && (
+            <SyncGitHubPanel projectId={project.id} lastSyncedAt={project.lastSyncedAt} embedded />
           )}
         </div>
       </SectionCard>
-
-      {isGithubConnected && <SyncGitHubPanel projectId={project.id} lastSyncedAt={project.lastSyncedAt} />}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <RecentActivitySection activities={activities} />
@@ -264,18 +290,20 @@ export default async function ProjectDetailPage({
       icon={FileText}
       title={`Documentation — ${documents.length} document${documents.length === 1 ? "" : "s"}`}
       action={
-        <Button href={`/projects/${project.id}/documents/new`} variant="ghost" size="sm" icon={Plus}>
-          Add Documentation
-        </Button>
+        canCreateDocument ? (
+          <Button href={`/projects/${project.id}/documents/new`} variant="ghost" size="sm" icon={Plus}>
+            Add Documentation
+          </Button>
+        ) : undefined
       }
     >
       {documents.length === 0 ? (
         <EmptyState
           icon={FileText}
           title="No documentation yet"
-          description="Import from GitHub, or add one manually."
-          actionHref={`/projects/${project.id}/documents/new`}
-          actionLabel="Add Documentation"
+          description={canCreateDocument ? "Import from GitHub, or add one manually." : "Nothing has been documented here yet."}
+          actionHref={canCreateDocument ? `/projects/${project.id}/documents/new` : undefined}
+          actionLabel={canCreateDocument ? "Add Documentation" : undefined}
         />
       ) : (
         <div className="space-y-4">
@@ -320,7 +348,15 @@ export default async function ProjectDetailPage({
     </SectionCard>
   );
 
-  const askAiPanel = <ProjectAssistant projectId={project.id} />;
+  const askAiPanel = canUseAssistant ? (
+    <ProjectAssistant projectId={project.id} />
+  ) : (
+    <EmptyState
+      icon={Sparkles}
+      title="AI assistant unavailable"
+      description="The project assistant isn't enabled for your account."
+    />
+  );
 
   const linksPanel =
     project.githubUrl || project.deploymentUrls.length > 0 || readmeDoc || setupGuideDoc || architectureDoc ? (
@@ -358,13 +394,22 @@ export default async function ProjectDetailPage({
         icon={Link2}
         title="No links yet"
         description="Connect a GitHub repository or add a deployment URL to see quick links here."
-        actionHref={`/projects/${project.id}/edit`}
-        actionLabel="Edit Project"
+        actionHref={canEditProject ? `/projects/${project.id}/edit` : undefined}
+        actionLabel={canEditProject ? "Edit Project" : undefined}
       />
     );
 
   const detailsColumn = (
     <>
+      <SectionCard icon={Users} title="Team">
+        <ProjectTeam
+          projectId={project.id}
+          team={project.team ?? []}
+          legacyOwner={project.owner}
+          canManage={canManageTeam}
+        />
+      </SectionCard>
+
       <SectionCard icon={IdCard} title="Project Details">
         <ProjectDetailsEditor project={project} />
       </SectionCard>
@@ -398,7 +443,7 @@ export default async function ProjectDetailPage({
 
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
-            <ProjectTypeIcon technologies={project.technologies} size={48} />
+            <ProjectTypeIcon name={project.name} description={project.description} technologies={project.technologies} size={48} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <InlineEditableTitle project={project} className="text-3xl leading-none sm:text-4xl" />

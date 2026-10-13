@@ -1,8 +1,17 @@
+import { apiAuthorize, denyUnlessFullAccess } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { InsightNotFoundError, saveInsightAsIdea } from "@/lib/insightCatalog";
 import { ValidationError } from "@/lib/validation";
 
 export async function POST(_request: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const auth = await apiAuthorize("ideas", "create");
+  if (!auth.ok) return auth.response;
+  // Insight cards are directory-wide, so reading one needs insights access too.
+  const insightsAuth = await apiAuthorize("insights", "view");
+  if (!insightsAuth.ok) return insightsAuth.response;
+  const denied = denyUnlessFullAccess(insightsAuth);
+  if (denied) return denied;
+
   const { id } = await context.params;
   try {
     const insight = await saveInsightAsIdea(id);

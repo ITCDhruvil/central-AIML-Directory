@@ -1,20 +1,23 @@
+import { audit } from "@/lib/audit";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { toProject } from "@/lib/projectMapper";
-import { ProjectNotFoundError, deleteProjectById, updateProjectFields } from "@/lib/projects";
+import { ProjectNotFoundError, deleteProjectById, getProjectById, updateProjectFields } from "@/lib/projects";
 import { ValidationError } from "@/lib/validation";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("projects", "view");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   try {
-    const row = await prisma.project.findUnique({ where: { id } });
-    if (!row) {
+    const project = await getProjectById(id, auth.access);
+    if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
     }
-    return NextResponse.json({ project: toProject(row) });
+    return NextResponse.json({ project });
   } catch (error) {
     console.error("GET /api/projects/[id] failed", error);
     return NextResponse.json({ error: "Failed to load project" }, { status: 500 });
@@ -22,6 +25,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("projects", "edit");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   let body: unknown;
@@ -32,7 +38,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const project = await updateProjectFields(id, body);
+    const project = await updateProjectFields(id, body, auth.access);
+    await audit({
+      action: "project.updated",
+      actorId: auth.user.id,
+      entityType: "project",
+      entityId: id,
+      meta: { name: project.name, fields: typeof body === "object" && body !== null ? Object.keys(body) : [] },
+      request,
+    });
     return NextResponse.json({ project });
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -46,11 +60,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("projects", "delete");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   try {
-    await deleteProjectById(id);
+    const before = await getProjectById(id, auth.access);
+    await deleteProjectById(id, auth.access);
+    await audit({ action: "project.deleted", actorId: auth.user.id, entityType: "project", entityId: id, meta: { name: before?.name }, request });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof ProjectNotFoundError) {

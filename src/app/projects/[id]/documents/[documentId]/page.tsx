@@ -1,3 +1,4 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDocumentationById } from "@/lib/documents";
@@ -10,8 +11,9 @@ export default async function DocumentDetailPage({
 }: {
   params: Promise<{ id: string; documentId: string }>;
 }) {
+  const { access } = await requirePagePermission("documents", "view");
   const { id, documentId } = await params;
-  const document = await getDocumentationById(id, documentId);
+  const document = await getDocumentationById(id, documentId, access);
 
   if (!document) {
     notFound();

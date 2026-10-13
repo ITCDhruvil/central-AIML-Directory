@@ -1,6 +1,12 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
+import { BrandingProvider } from "@/components/BrandingProvider";
+import { PolicyProvider } from "@/components/PolicyProvider";
+import { documentTitle } from "@/lib/branding";
+import { getBranding } from "@/lib/brandingSettings";
+import { getSecurityPolicy } from "@/lib/securityPolicySettings";
+import { getCurrentUser } from "@/lib/auth/dal";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -14,12 +20,15 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Central AIML Project Directory",
-  description: "Internal AIML project tracking directory",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    title: documentTitle(await getBranding()),
+    description: "Internal AIML project tracking directory",
+  };
+}
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const [user, policy, branding] = await Promise.all([getCurrentUser(), getSecurityPolicy(), getBranding()]);
   return (
     <html
       lang="en"
@@ -31,7 +40,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="h-screen overflow-hidden">
-        <AppShell>{children}</AppShell>
+        <BrandingProvider branding={branding}>
+          <PolicyProvider policy={policy}>
+            <AppShell user={user}>{children}</AppShell>
+          </PolicyProvider>
+        </BrandingProvider>
       </body>
     </html>
   );

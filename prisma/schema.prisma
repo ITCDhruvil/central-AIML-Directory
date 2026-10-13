@@ -17,14 +17,14 @@ model Project {
   description String?
 
   // ProjectType: PROJECT | POC | EXPERIMENT | TOOL | OTHER
-  type String
+  type   String
   // ProjectStatus: ACTIVE | COMPLETED | ON_HOLD | ARCHIVED
   status String
   // ProjectStage: IDEA | POC | DEVELOPMENT | TESTING | PRODUCTION | ARCHIVED
   // Nullable — existing projects stay unset until edited; new projects default to IDEA in app code.
-  stage String?
+  stage  String?
   // Free-text project owner (not GitHub repo owner; no auth/user system).
-  owner String?
+  owner  String?
 
   githubUrl     String?
   githubOwner   String?
@@ -54,9 +54,9 @@ model Idea {
   description String?
 
   // IdeaStatus: ACTIVE | ON_HOLD | PROMOTED | ARCHIVED
-  status String @default("ACTIVE")
+  status String  @default("ACTIVE")
   // Free-text idea owner (no auth/user system — same convention as Project.owner).
-  owner String?
+  owner  String?
 
   // JSON-encoded string arrays (SQLite has no native scalar-list/enum support)
   technologies String @default("[]")
@@ -73,17 +73,199 @@ model Idea {
   @@index([status])
 }
 
-// Reusable owner names for project/idea forms (free-text, no auth/user system).
+// Reusable owner names for project/idea forms. Free-text on Project/Idea; an admin can
+// link a name to a User so that user's "own" scope matches items owned by this name.
 model Owner {
   id        String   @id @default(cuid())
   name      String   @unique
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Auth, roles and permissions
+// ---------------------------------------------------------------------------
+
+model User {
+  id                 String    @id @default(cuid())
+  email              String    @unique
+  name               String
+  passwordHash       String
+  // Role: ADMIN | MANAGER | MEMBER | VIEWER
+  role               String    @default("MEMBER")
+  active             Boolean   @default(true)
+  mustChangePassword Boolean   @default(false)
+  // Bumped to invalidate every existing session of this user.
+  sessionVersion     Int       @default(0)
+  createdAt          DateTime  @default(now())
+  lastLoginAt        DateTime?
+
+  owners         Owner[]
+  permissions    UserPermission[]
+  quota          AiQuota?
+  notifications  Notification[]
+  resetRequests  PasswordResetRequest[] @relation("ResetRequestUser")
+  resolvedResets PasswordResetRequest[] @relation("ResetRequestResolver")
+  aiUsage        AiUsageLog[]
+  auditEntries   AuditLog[]
+  sharesReceived ItemShare[]            @relation("ShareRecipient")
+  sharesGranted  ItemShare[]            @relation("ShareGrantor")
+  passwordHistory PasswordHistory[]
+  avatar          UserAvatar?
+}
+
+// A person's profile picture. Kept in its own table so the image bytes are never loaded with ordinary user queries;
+// only the avatar endpoint reads `data`. updatedAt doubles as the cache-busting version in the picture's URL.
+model UserAvatar {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data        Bytes
+  contentType String
+  updatedAt   DateTime @updatedAt
+}
+
+// Hashes of a user's previous passwords, so they can't go back to a recent one.
+model PasswordHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hash      String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Admin-edited role defaults. Missing rows fall back to built-in defaults in code.
+model RolePermission {
+  id       String @id @default(cuid())
+  role     String
+  resource String
+  action   String
+  // NONE | OWN | ALL
+  scope    String
+
+  @@unique([role, resource, action])
+}
+
+// Per-user override of the role default for one resource/action.
+model UserPermission {
+  id       String @id @default(cuid())
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resource String
+  action   String
+  scope    String
+
+  @@unique([userId, resource, action])
+}
+
+model PasswordResetRequest {
+  id           String    @id @default(cuid())
+  email        String
+  userId       String?
+  user         User?     @relation("ResetRequestUser", fields: [userId], references: [id], onDelete: SetNull)
+  // PENDING | RESOLVED | REJECTED
+  status       String    @default("PENDING")
+  createdAt    DateTime  @default(now())
+  resolvedAt   DateTime?
+  resolvedById String?
+  resolvedBy   User?     @relation("ResetRequestResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  // true when the person asked while signed in (Settings → Security). Only those can be auto-issued after the wait.
+  viaSession   Boolean   @default(false)
+
+  @@index([status, createdAt])
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // e.g. PASSWORD_RESET_REQUESTED
+  type      String
+  // JSON-encoded string
+  payload   String    @default("{}")
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, readAt, createdAt])
+}
+
+// Global key/value admin settings (JSON-encoded values), e.g. "ai.enabled".
+model AppSetting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// Per-user AI limits; null fields inherit the AppSetting defaults. null = unlimited.
+model AiQuota {
+  id            String @id @default(cuid())
+  userId        String @unique
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  dailyRequests Int?
+  monthlyTokens Int?
+}
+
+model AiUsageLog {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feature      String
+  model        String?
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  // OK | BLOCKED_QUOTA | BLOCKED_PERMISSION | ERROR
+  status       String
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([feature, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  action     String
+  entityType String?
+  entityId   String?
+  // JSON-encoded string
+  meta       String   @default("{}")
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+}
+
+// Grants one user access to a specific project/idea beyond their owner scope.
+model ItemShare {
+  id          String   @id @default(cuid())
+  // PROJECT | IDEA
+  entityType  String
+  entityId    String
+  userId      String
+  user        User     @relation("ShareRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  // VIEW | EDIT
+  access      String   @default("VIEW")
+  grantedById String?
+  grantedBy   User?    @relation("ShareGrantor", fields: [grantedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@unique([entityType, entityId, userId])
+  @@index([userId])
 }
 
 model ProjectActivity {
   id        String  @id @default(cuid())
   projectId String
   project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  // User who triggered the event; null for events before auth existed or system events.
+  actorId   String?
 
   // ProjectActivityType: PROJECT_CREATED | PROJECT_UPDATED | GITHUB_SYNCED | DOCUMENTATION_UPDATED | DEPLOYMENT_UPDATED
   type  String

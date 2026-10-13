@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { CornerDownLeft, Loader2, X } from "lucide-react";
+import { useCan } from "@/components/AuthProvider";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { cn } from "@/lib/cn";
 import { saveProjectFields } from "@/lib/saveProjectFields";
@@ -17,6 +18,7 @@ import { TECHNOLOGY_CATEGORIES, type Technology, type TechnologyCategory } from 
 export function TechStackSummaryEditor({ project }: { project: Project }) {
   const router = useRouter();
   const [technologies, setTechnologies] = useState(project.technologies);
+  const canEdit = useCan("projects", "edit");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [category, setCategory] = useState<TechnologyCategory>("OTHER");
@@ -63,6 +65,7 @@ export function TechStackSummaryEditor({ project }: { project: Project }) {
   }
 
   function startEdit() {
+    if (!canEdit) return;
     setTechnologies(project.technologies);
     setEditing(true);
   }

@@ -1,3 +1,4 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import { notFound } from "next/navigation";
 import { AlignLeft, CalendarPlus, History, Lightbulb, Package, Rocket, User } from "lucide-react";
 import { getIdeaById } from "@/lib/ideas";
@@ -34,8 +35,9 @@ function InfoRow({ icon: Icon, iconClassName, label, value }: { icon: IconType; 
 }
 
 export default async function IdeaDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { access } = await requirePagePermission("ideas", "view");
   const { id } = await params;
-  const idea = await getIdeaById(id);
+  const idea = await getIdeaById(id, access);
 
   if (!idea) {
     notFound();

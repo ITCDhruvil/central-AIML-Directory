@@ -1,3 +1,5 @@
+import { guardedAi } from "@/lib/ai/guard";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectById } from "@/lib/projects";
 import { listDocumentation } from "@/lib/documents";
@@ -14,10 +16,17 @@ type RouteParams = { params: Promise<{ id: string }> };
  * never modifies anything, and never forwards raw document content back to
  * the browser as input — the browser sends only the question.
  */
-export async function POST(request: NextRequest, { params }: RouteParams) {
+async function handlePost(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("ai_project_assistant", "use");
+  if (!auth.ok) return auth.response;
+
+  // The AI toggle carries no ownership, so project visibility comes from projects:view.
+  const view = await apiAuthorize("projects", "view");
+  if (!view.ok) return view.response;
+
   const { id } = await params;
 
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, view.access);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
@@ -70,3 +79,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Failed to answer the question" }, { status: 500 });
   }
 }
+
+// Master switch, per-feature switch, quota and usage log (see lib/ai/guard.ts).
+export const POST = guardedAi("ai_project_assistant", handlePost);

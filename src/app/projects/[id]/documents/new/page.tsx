@@ -1,3 +1,4 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getProjectById } from "@/lib/projects";
@@ -8,8 +9,9 @@ export default async function NewDocumentPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { access } = await requirePagePermission("documents", "create");
   const { id } = await params;
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, access);
 
   if (!project) {
     notFound();

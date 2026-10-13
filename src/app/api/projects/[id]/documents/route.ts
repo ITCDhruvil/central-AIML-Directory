@@ -1,3 +1,5 @@
+import { audit } from "@/lib/audit";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toDocumentation } from "@/lib/documentMapper";
@@ -10,10 +12,13 @@ import { ValidationError, validateManualDocumentInput } from "@/lib/validation";
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("documents", "view");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   try {
-    const documents = await listDocumentation(id);
+    const documents = await listDocumentation(id, auth.access);
     return NextResponse.json({ documents });
   } catch (error) {
     console.error("GET /api/projects/[id]/documents failed", error);
@@ -23,9 +28,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 /** Creates a manually-authored document. GitHub/generated documents are never created through this endpoint. */
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("documents", "create");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, auth.access);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }
@@ -56,6 +64,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return created;
     });
 
+    await audit({ action: "document.created", actorId: auth.user.id, entityType: "document", entityId: row.id, meta: { title: row.title, projectId: id }, request });
     return NextResponse.json({ document: toDocumentation(row) }, { status: 201 });
   } catch (error) {
     if (error instanceof ValidationError) {

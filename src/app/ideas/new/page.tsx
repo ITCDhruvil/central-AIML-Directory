@@ -1,6 +1,8 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import { IdeaForm } from "@/components/IdeaForm";
 
-export default function NewIdeaPage() {
+export default async function NewIdeaPage() {
+  await requirePagePermission("ideas", "create");
   return (
     <div className="w-full space-y-6">
       <div>

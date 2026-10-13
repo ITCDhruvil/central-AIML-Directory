@@ -1,4 +1,6 @@
+import { apiAuthorize, loadViewAccess } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
+import { ideaScopeWhere, projectScopeWhere } from "@/lib/auth/scope";
 import { prisma } from "@/lib/prisma";
 import { toIdea } from "@/lib/ideaMapper";
 import { toProject } from "@/lib/projectMapper";
@@ -13,6 +15,9 @@ import type { DocumentCategory } from "@/types/documentation";
  * snippets do.
  */
 export async function GET(request: NextRequest) {
+  const auth = await apiAuthorize("search", "view");
+  if (!auth.ok) return auth.response;
+
   const query = request.nextUrl.searchParams.get("q") ?? "";
 
   if (!query.trim()) {
@@ -20,10 +25,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    // Results mix three entity kinds; each follows its own view permission (documents via their project).
+    const view = await loadViewAccess(auth.user);
     const [projectRows, ideaRows, documentRows] = await Promise.all([
-      prisma.project.findMany(),
-      prisma.idea.findMany(),
+      prisma.project.findMany({ where: projectScopeWhere(view.projects) }),
+      prisma.idea.findMany({ where: ideaScopeWhere(view.ideas) }),
       prisma.documentation.findMany({
+        where: view.documents.all ? {} : { project: projectScopeWhere(view.documents) },
         select: { id: true, projectId: true, title: true, category: true, content: true },
       }),
     ]);

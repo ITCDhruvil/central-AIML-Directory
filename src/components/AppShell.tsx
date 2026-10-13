@@ -1,10 +1,14 @@
 "use client";
 
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { usePathname } from "next/navigation";
+import { AuthProvider } from "@/components/AuthProvider";
 import { Chatbot } from "@/components/Chatbot";
 import { ChatbotProvider } from "@/components/ChatbotContext";
 import { Sidebar } from "@/components/Sidebar";
 import { TopBar } from "@/components/TopBar";
+import { can } from "@/lib/auth/permissions";
+import type { AuthUser } from "@/lib/auth/types";
 import { cn } from "@/lib/cn";
 
 const COLLAPSED_KEY = "sidebar-collapsed";
@@ -23,7 +27,11 @@ function getCollapsed() {
   return window.localStorage.getItem(COLLAPSED_KEY) === "1";
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+// Pages that render without the sidebar chrome.
+const BARE_PATHS = ["/login", "/change-password"];
+
+export function AppShell({ user, children }: { user: AuthUser | null; children: React.ReactNode }) {
+  const pathname = usePathname();
   const collapsed = useSyncExternalStore(subscribeCollapsed, getCollapsed, () => false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -41,7 +49,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     window.dispatchEvent(new Event(COLLAPSED_EVENT));
   }
 
+  if (!user || BARE_PATHS.includes(pathname)) return <>{children}</>;
+
+  const canChat = can(user.permissions, "ai_chatbot", "use");
+
   return (
+    <AuthProvider user={user}>
     <ChatbotProvider>
       <div className="flex h-screen flex-col overflow-hidden bg-zinc-100 font-sans dark:bg-zinc-950">
         <TopBar onOpenMenu={() => setMobileOpen(true)} />
@@ -62,6 +75,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             )}
           >
             <Sidebar
+              user={user}
               collapsed={mobileOpen ? false : collapsed}
               onToggle={mobileOpen ? () => setMobileOpen(false) : toggleCollapsed}
               onNavigate={() => setMobileOpen(false)}
@@ -72,8 +86,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
-        <Chatbot />
+        {canChat && <Chatbot />}
       </div>
     </ChatbotProvider>
+    </AuthProvider>
   );
 }

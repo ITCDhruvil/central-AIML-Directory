@@ -11,6 +11,8 @@ import Placeholder from "@tiptap/extension-placeholder";
 import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Extension } from "@tiptap/core";
+import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
+import { Image } from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import {
   Bold,
@@ -19,8 +21,17 @@ import {
   ChevronRight,
   Code,
   Code2,
+  Heading,
+  Heading1,
   Heading2,
   Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  Image as ImageIcon,
+  Pilcrow,
+  Table2,
+  Trash2,
   Heart,
   Italic,
   Languages,
@@ -59,8 +70,12 @@ import {
 /** Matches MarkdownView's rendered look (src/components/MarkdownView.tsx) so what you type looks like what gets shown elsewhere. */
 const EDITOR_CLASSES = [
   "min-h-24 px-3 py-2 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:text-zinc-100",
+  "[&_h1]:mt-3 [&_h1]:mb-1.5 [&_h1]:text-lg [&_h1]:font-semibold",
   "[&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-base [&_h2]:font-semibold",
   "[&_h3]:mt-2.5 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold",
+  "[&_h4]:mt-2 [&_h4]:mb-1 [&_h4]:text-sm [&_h4]:font-medium",
+  "[&_h5]:mt-2 [&_h5]:mb-0.5 [&_h5]:text-xs [&_h5]:font-semibold",
+  "[&_h6]:mt-2 [&_h6]:mb-0.5 [&_h6]:text-xs [&_h6]:font-medium",
   "[&_p]:my-1.5 [&_ul]:my-1.5 [&_ul]:list-disc [&_ul]:pl-5 [&_ol]:my-1.5 [&_ol]:list-decimal [&_ol]:pl-5",
   "[&_a]:text-orange-600 [&_a]:underline dark:[&_a]:text-orange-400",
   "[&_code]:rounded [&_code]:bg-zinc-100 [&_code]:px-1 [&_code]:py-0.5 [&_code]:text-xs dark:[&_code]:bg-zinc-800",
@@ -68,6 +83,14 @@ const EDITOR_CLASSES = [
   "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
   "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-300 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-500 dark:[&_blockquote]:border-zinc-700",
   "[&_hr]:my-3 [&_hr]:border-zinc-200 dark:[&_hr]:border-zinc-800",
+  "[&_.tableWrapper]:my-2 [&_.tableWrapper]:overflow-x-auto",
+  "[&_table]:w-full [&_table]:border-collapse [&_table]:text-left",
+  "[&_th]:relative [&_th]:border [&_th]:border-zinc-300 [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold dark:[&_th]:border-zinc-700 dark:[&_th]:bg-zinc-800",
+  "[&_td]:relative [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 dark:[&_td]:border-zinc-700",
+  "[&_.selectedCell]:bg-orange-500/10",
+  "[&_.column-resize-handle]:absolute [&_.column-resize-handle]:top-0 [&_.column-resize-handle]:right-[-2px] [&_.column-resize-handle]:bottom-0 [&_.column-resize-handle]:w-1 [&_.column-resize-handle]:bg-orange-500",
+  "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md",
+  "[&_img.ProseMirror-selectednode]:outline [&_img.ProseMirror-selectednode]:outline-2 [&_img.ProseMirror-selectednode]:outline-orange-500",
   "[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0",
   "[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2",
   "[&_ul[data-type=taskList]_li>label]:mt-1 [&_ul[data-type=taskList]_li>div]:flex-1",
@@ -83,6 +106,7 @@ function shortcutLabel(parts: string[]): string {
     .map((part) => {
       if (part === "Mod") return IS_MAC ? "⌘" : "Ctrl";
       if (part === "Shift") return IS_MAC ? "⇧" : "Shift";
+      if (part === "Alt") return IS_MAC ? "⌥" : "Alt";
       return part;
     })
     .join(IS_MAC ? "" : "+");
@@ -222,6 +246,7 @@ function SplitToolbarGroup({
 function MenuItemWithShortcut({
   icon: Icon,
   label,
+  labelClassName,
   shortcut,
   active,
   muted,
@@ -229,7 +254,8 @@ function MenuItemWithShortcut({
 }: {
   icon: LucideIcon;
   label: string;
-  shortcut: string;
+  labelClassName?: string;
+  shortcut?: string;
   active?: boolean;
   muted?: boolean;
   onClick: () => void;
@@ -250,10 +276,12 @@ function MenuItemWithShortcut({
       )}
     >
       <Icon size={15} className="shrink-0" />
-      <span className="flex-1">{label}</span>
-      <kbd className="rounded bg-zinc-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-        {shortcut}
-      </kbd>
+      <span className={cn("flex-1", labelClassName)}>{label}</span>
+      {shortcut && (
+        <kbd className="rounded bg-zinc-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+          {shortcut}
+        </kbd>
+      )}
     </button>
   );
 }
@@ -377,6 +405,147 @@ function ListsMenu({ editor }: { editor: Editor }) {
       />
     </SplitToolbarGroup>
   );
+}
+
+const HEADING_LEVELS = [1, 2, 3, 4, 5, 6] as const;
+
+const HEADING_ICONS: Record<(typeof HEADING_LEVELS)[number], LucideIcon> = {
+  1: Heading1,
+  2: Heading2,
+  3: Heading3,
+  4: Heading4,
+  5: Heading5,
+  6: Heading6,
+};
+
+/** Same scale the editor uses, so the menu previews the heading you will get. */
+const HEADING_LABEL_CLASS: Record<(typeof HEADING_LEVELS)[number], string> = {
+  1: "text-lg font-semibold leading-tight",
+  2: "text-base font-semibold leading-tight",
+  3: "text-sm font-semibold leading-tight",
+  4: "text-sm font-medium leading-tight",
+  5: "text-xs font-semibold leading-tight",
+  6: "text-xs font-medium leading-tight",
+};
+
+function HeadingsMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const activeLevel = HEADING_LEVELS.find((level) => editor.isActive("heading", { level }));
+  const Icon = activeLevel ? HEADING_ICONS[activeLevel] : Heading;
+
+  function run(action: () => void) {
+    action();
+    setOpen(false);
+  }
+
+  return (
+    <SplitToolbarGroup label="Headings" icon={Icon} active={activeLevel != null} open={open} onOpenChange={setOpen}>
+      <MenuItemWithShortcut
+        icon={Pilcrow}
+        label="Paragraph"
+        active={!activeLevel && editor.isActive("paragraph") && !editor.isActive("listItem")}
+        onClick={() => run(() => editor.chain().focus().setParagraph().run())}
+      />
+      {HEADING_LEVELS.map((level) => (
+        <MenuItemWithShortcut
+          key={level}
+          icon={HEADING_ICONS[level]}
+          label={`Heading ${level}`}
+          labelClassName={HEADING_LABEL_CLASS[level]}
+          shortcut={shortcutLabel(["Mod", "Alt", String(level)])}
+          active={activeLevel === level}
+          onClick={() => run(() => editor.chain().focus().toggleHeading({ level }).run())}
+        />
+      ))}
+    </SplitToolbarGroup>
+  );
+}
+
+function TableMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const inTable = editor.isActive("table");
+  const inHeader = editor.isActive("tableHeader");
+
+  function run(action: () => void) {
+    action();
+    setOpen(false);
+  }
+
+  return (
+    <SplitToolbarGroup label="Table" icon={Table2} active={inTable} open={open} onOpenChange={setOpen}>
+      {!inTable && (
+        <MenuItemWithShortcut
+          icon={Table2}
+          label="Insert table"
+          onClick={() => run(() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
+        />
+      )}
+      {inTable && (
+        <>
+          <MenuItemWithShortcut
+            icon={Table2}
+            label="Add row below"
+            onClick={() => run(() => editor.chain().focus().addRowAfter().run())}
+          />
+          <MenuItemWithShortcut
+            icon={Table2}
+            label="Add column after"
+            onClick={() => run(() => editor.chain().focus().addColumnAfter().run())}
+          />
+          {!inHeader && (
+            <MenuItemWithShortcut
+              icon={Trash2}
+              label="Delete row"
+              muted
+              onClick={() => run(() => editor.chain().focus().deleteRow().run())}
+            />
+          )}
+          <MenuItemWithShortcut
+            icon={Trash2}
+            label="Delete column"
+            muted
+            onClick={() => run(() => editor.chain().focus().deleteColumn().run())}
+          />
+          <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+          <MenuItemWithShortcut
+            icon={Trash2}
+            label="Delete table"
+            muted
+            onClick={() => run(() => editor.chain().focus().deleteTable().run())}
+          />
+        </>
+      )}
+    </SplitToolbarGroup>
+  );
+}
+
+/** Only http(s) addresses, so an image cannot be a script URL. */
+function imageUrl(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.toString();
+  } catch {
+    return null;
+  }
+}
+
+function insertOrEditImage(editor: Editor) {
+  const previous = (editor.getAttributes("image").src as string | undefined) ?? "";
+  const entered = window.prompt("Image URL", previous);
+  if (entered === null) return;
+  if (!entered.trim()) {
+    if (editor.isActive("image")) editor.chain().focus().deleteSelection().run();
+    return;
+  }
+  const src = imageUrl(entered);
+  if (!src) {
+    window.alert("Use an image address that starts with http:// or https://.");
+    return;
+  }
+  const chain = editor.chain().focus();
+  if (editor.isActive("image")) chain.updateAttributes("image", { src }).run();
+  else chain.setImage({ src }).run();
 }
 
 function AiMenuItem({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
@@ -553,21 +722,7 @@ function Toolbar({ editor }: { editor: Editor }) {
 
       <FormatTextMenu editor={editor} />
       <ListsMenu editor={editor} />
-
-      <ToolbarDivider />
-
-      <ToolbarButton
-        label="Heading 2"
-        icon={Heading2}
-        active={editor.isActive("heading", { level: 2 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-      />
-      <ToolbarButton
-        label="Heading 3"
-        icon={Heading3}
-        active={editor.isActive("heading", { level: 3 })}
-        onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-      />
+      <HeadingsMenu editor={editor} />
 
       <ToolbarDivider />
 
@@ -584,6 +739,13 @@ function Toolbar({ editor }: { editor: Editor }) {
         onClick={() => editor.chain().focus().toggleCodeBlock().run()}
       />
       <ToolbarButton label="Divider" icon={Minus} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
+      <TableMenu editor={editor} />
+      <ToolbarButton
+        label="Image"
+        icon={ImageIcon}
+        active={editor.isActive("image")}
+        onClick={() => insertOrEditImage(editor)}
+      />
       <ToolbarButton
         label="Link"
         icon={Link2}
@@ -627,7 +789,12 @@ export function RichTextEditor({
 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [2, 3] } }),
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+      Table.configure({ resizable: true }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      Image,
       Underline,
       Subscript,
       Superscript,

@@ -4,7 +4,8 @@ import { planInsightMerge, summarizeMerge } from "@/lib/insightMerge";
 import { suggestionToIdeaInput } from "@/lib/insightsToIdea";
 import { createIdea } from "@/lib/ideas";
 import { toInsight, toInsightGeneration, toInsightMergeRecord } from "@/lib/insightMapper";
-import type { Insight, InsightSnapshot } from "@/types/insight";
+import { INSIGHT_SEARCH_FIELDS, orContainsFields } from "@/lib/schemaSearch";
+import { INSIGHT_TYPES, type Insight, type InsightSnapshot } from "@/types/insight";
 
 export const CATALOG_INSIGHT_SCOPE = "catalog";
 
@@ -14,6 +15,37 @@ export function insightScope(projectId?: string | null): string {
 }
 
 export class InsightNotFoundError extends Error {}
+
+export interface InsightFilters {
+  q?: string;
+  scope?: string;
+  type?: string;
+}
+
+export function buildInsightWhere(filters: InsightFilters) {
+  const clauses: Record<string, unknown>[] = [];
+
+  if (filters.q?.trim()) {
+    clauses.push({ OR: orContainsFields(INSIGHT_SEARCH_FIELDS, filters.q) });
+  }
+  if (filters.scope) clauses.push({ scope: filters.scope });
+  if (filters.type && INSIGHT_TYPES.includes(filters.type as (typeof INSIGHT_TYPES)[number])) {
+    clauses.push({ type: filters.type });
+  }
+
+  if (clauses.length === 0) return {};
+  if (clauses.length === 1) return clauses[0];
+  return { AND: clauses };
+}
+
+export async function listInsights(filters: InsightFilters = {}): Promise<Insight[]> {
+  const rows = await prisma.insight.findMany({
+    where: buildInsightWhere(filters),
+    orderBy: { lastGeneratedAt: "desc" },
+    take: 50,
+  });
+  return rows.map(toInsight);
+}
 
 export async function getInsightById(id: string): Promise<Insight | null> {
   const row = await prisma.insight.findUnique({ where: { id } });

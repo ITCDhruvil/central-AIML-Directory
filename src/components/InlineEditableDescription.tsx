@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useCan } from "@/components/AuthProvider";
 import { MarkdownView } from "@/components/MarkdownView";
 import { Button } from "@/components/ui/Button";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
@@ -10,6 +11,7 @@ import type { Project } from "@/types/project";
 
 export function InlineEditableDescription({ project }: { project: Project }) {
   const router = useRouter();
+  const canEdit = useCan("projects", "edit");
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(project.description ?? "");
   const [saving, setSaving] = useState(false);
@@ -65,6 +67,16 @@ export function InlineEditableDescription({ project }: { project: Project }) {
           </Button>
         </div>
       </div>
+    );
+  }
+
+  if (!canEdit) {
+    return project.description?.trim() ? (
+      <div className="w-full px-1">
+        <MarkdownView content={project.description} />
+      </div>
+    ) : (
+      <p className="px-1 py-6 text-sm text-zinc-400">No description.</p>
     );
   }
 

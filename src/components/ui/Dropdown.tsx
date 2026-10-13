@@ -29,6 +29,7 @@ export function Dropdown({
   className,
   triggerClassName,
   defaultOpen = false,
+  disabled = false,
   onDismiss,
   "aria-label": ariaLabel,
 }: {
@@ -40,6 +41,7 @@ export function Dropdown({
   className?: string;
   triggerClassName?: string;
   defaultOpen?: boolean;
+  disabled?: boolean;
   onDismiss?: () => void;
   "aria-label"?: string;
 }) {
@@ -101,6 +103,7 @@ export function Dropdown({
     <div ref={ref} className={cn("relative", className)}>
       <button
         type="button"
+        disabled={disabled}
         onClick={() => {
           if (open) {
             setOpen(false);

@@ -3,48 +3,86 @@ import { prisma } from "@/lib/prisma";
 import { deploymentUrlsChanged, recordProjectActivity } from "@/lib/projectActivity";
 import { ensureOwnerName } from "@/lib/owners";
 import { toProject } from "@/lib/projectMapper";
+import { removeTeam, withTeams } from "@/lib/projectTeam";
+import { ownerPrismaClause } from "@/lib/ownerSearch";
+import { ALL_ACCESS, andWhere, projectScopeWhere, type AccessScope } from "@/lib/auth/scope";
+import {
+  DOCUMENT_SEARCH_FIELDS,
+  PROJECT_ACTIVITY_SEARCH_FIELDS,
+  PROJECT_SEARCH_FIELDS,
+  containsInsensitive,
+  orContainsFields,
+} from "@/lib/schemaSearch";
 import { uniqueSlug } from "@/lib/slug";
 import { validateProjectInput, type ValidatedDocument } from "@/lib/validation";
-import { PROJECT_STATUSES, PROJECT_TYPES, type Project } from "@/types/project";
+import { PROJECT_STAGES, PROJECT_STATUSES, PROJECT_TYPES, type Project } from "@/types/project";
 
 export interface ProjectFilters {
   q?: string;
   type?: string;
   status?: string;
+  stage?: string;
+  owner?: string;
+  tag?: string;
+  technology?: string;
 }
 
 export class ProjectNotFoundError extends Error {}
 
 export function buildProjectWhere(filters: ProjectFilters) {
-  const where: Record<string, unknown> = {};
+  const clauses: Record<string, unknown>[] = [];
 
   if (filters.q) {
-    where.OR = [
-      { name: { contains: filters.q } },
-      { description: { contains: filters.q } },
-    ];
+    const q = filters.q.trim();
+    if (q) {
+      const ownerMatch = ownerPrismaClause(q);
+      clauses.push({
+        OR: [
+          ...orContainsFields(PROJECT_SEARCH_FIELDS, q),
+          ...(ownerMatch ? [ownerMatch] : []),
+          { documentation: { some: { OR: orContainsFields(DOCUMENT_SEARCH_FIELDS, q) } } },
+          { activities: { some: { OR: orContainsFields(PROJECT_ACTIVITY_SEARCH_FIELDS, q) } } },
+        ],
+      });
+    }
+  }
+  if (filters.owner) {
+    const ownerMatch = ownerPrismaClause(filters.owner);
+    if (ownerMatch) clauses.push(ownerMatch);
   }
   if (filters.type && PROJECT_TYPES.includes(filters.type as (typeof PROJECT_TYPES)[number])) {
-    where.type = filters.type;
+    clauses.push({ type: filters.type });
   }
   if (filters.status && PROJECT_STATUSES.includes(filters.status as (typeof PROJECT_STATUSES)[number])) {
-    where.status = filters.status;
+    clauses.push({ status: filters.status });
+  }
+  if (filters.stage && PROJECT_STAGES.includes(filters.stage as (typeof PROJECT_STAGES)[number])) {
+    clauses.push({ stage: filters.stage });
+  }
+  if (filters.tag?.trim()) {
+    clauses.push({ tags: containsInsensitive(filters.tag.trim()) });
+  }
+  if (filters.technology?.trim()) {
+    clauses.push({ technologies: containsInsensitive(filters.technology.trim()) });
   }
 
-  return where;
+  if (clauses.length === 0) return {};
+  if (clauses.length === 1) return clauses[0];
+  return { AND: clauses };
 }
 
-export async function listProjects(filters: ProjectFilters = {}): Promise<Project[]> {
+/** `access` limits results to what a scoped (non-admin) user may see; defaults to everything. */
+export async function listProjects(filters: ProjectFilters = {}, access: AccessScope = ALL_ACCESS): Promise<Project[]> {
   const rows = await prisma.project.findMany({
-    where: buildProjectWhere(filters),
+    where: andWhere(buildProjectWhere(filters), projectScopeWhere(access)),
     orderBy: { createdAt: "desc" },
   });
-  return rows.map(toProject);
+  return withTeams(rows.map(toProject));
 }
 
-export async function getProjectById(id: string): Promise<Project | null> {
-  const row = await prisma.project.findUnique({ where: { id } });
-  return row ? toProject(row) : null;
+export async function getProjectById(id: string, access: AccessScope = ALL_ACCESS): Promise<Project | null> {
+  const row = await prisma.project.findFirst({ where: andWhere({ id }, projectScopeWhere(access)) });
+  return row ? (await withTeams([toProject(row)]))[0] : null;
 }
 
 /** Creates and persists a new project. `rawInput` is validated here — callers (the POST route, chatbot tools) may pass unvalidated body/tool-call data straight through. */
@@ -121,8 +159,12 @@ export async function createProject(rawInput: unknown, documents: ValidatedDocum
  * patch is exactly as safe as editing the full form. Shared by the PUT route
  * and the chatbot's update_project tool so the two never diverge.
  */
-export async function updateProjectFields(id: string, patch: unknown): Promise<Project> {
-  const existingRow = await prisma.project.findUnique({ where: { id } });
+export async function updateProjectFields(
+  id: string,
+  patch: unknown,
+  access: AccessScope = ALL_ACCESS,
+): Promise<Project> {
+  const existingRow = await prisma.project.findFirst({ where: andWhere({ id }, projectScopeWhere(access)) });
   if (!existingRow) {
     throw new ProjectNotFoundError(`Project ${id} not found`);
   }
@@ -185,9 +227,12 @@ export async function updateProjectFields(id: string, patch: unknown): Promise<P
   return toProject(row);
 }
 
-export async function deleteProjectById(id: string): Promise<void> {
+export async function deleteProjectById(id: string, access: AccessScope = ALL_ACCESS): Promise<void> {
+  const visible = await prisma.project.findFirst({ where: andWhere({ id }, projectScopeWhere(access)), select: { id: true } });
+  if (!visible) throw new ProjectNotFoundError(`Project ${id} not found`);
   try {
     await prisma.project.delete({ where: { id } });
+    await removeTeam("PROJECT", id);
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025") {
       throw new ProjectNotFoundError(`Project ${id} not found`);
@@ -196,12 +241,13 @@ export async function deleteProjectById(id: string): Promise<void> {
   }
 }
 
-export async function getProjectStats() {
+export async function getProjectStats(access: AccessScope = ALL_ACCESS) {
+  const scope = projectScopeWhere(access);
   const [total, active, poc, githubConnected] = await Promise.all([
-    prisma.project.count(),
-    prisma.project.count({ where: { status: "ACTIVE" } }),
-    prisma.project.count({ where: { type: "POC" } }),
-    prisma.project.count({ where: { githubUrl: { not: null } } }),
+    prisma.project.count({ where: scope }),
+    prisma.project.count({ where: andWhere({ status: "ACTIVE" }, scope) }),
+    prisma.project.count({ where: andWhere({ type: "POC" }, scope) }),
+    prisma.project.count({ where: andWhere({ githubUrl: { not: null } }, scope) }),
   ]);
   return { total, active, poc, githubConnected };
 }

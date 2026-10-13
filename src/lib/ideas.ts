@@ -1,7 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { ensureOwnerName } from "@/lib/owners";
+import { removeTeam } from "@/lib/projectTeam";
 import { toIdea } from "@/lib/ideaMapper";
 import { createProject } from "@/lib/projects";
+import { ownerPrismaClause } from "@/lib/ownerSearch";
+import { ALL_ACCESS, andWhere, ideaScopeWhere, type AccessScope } from "@/lib/auth/scope";
+import { IDEA_SEARCH_FIELDS, containsInsensitive, orContainsFields } from "@/lib/schemaSearch";
 import { uniqueIdeaSlug } from "@/lib/slug";
 import { validateIdeaInput, ValidationError } from "@/lib/validation";
 import { IDEA_STATUSES, type Idea } from "@/types/idea";
@@ -9,33 +13,55 @@ import { IDEA_STATUSES, type Idea } from "@/types/idea";
 export interface IdeaFilters {
   q?: string;
   status?: string;
+  owner?: string;
+  tag?: string;
+  technology?: string;
 }
 
 export class IdeaNotFoundError extends Error {}
 
 export function buildIdeaWhere(filters: IdeaFilters) {
-  const where: Record<string, unknown> = {};
+  const clauses: Record<string, unknown>[] = [];
 
   if (filters.q) {
-    where.OR = [{ name: { contains: filters.q } }, { description: { contains: filters.q } }];
+    const q = filters.q.trim();
+    if (q) {
+      const ownerMatch = ownerPrismaClause(q);
+      clauses.push({
+        OR: [...orContainsFields(IDEA_SEARCH_FIELDS, q), ...(ownerMatch ? [ownerMatch] : [])],
+      });
+    }
+  }
+  if (filters.owner) {
+    const ownerMatch = ownerPrismaClause(filters.owner);
+    if (ownerMatch) clauses.push(ownerMatch);
   }
   if (filters.status && IDEA_STATUSES.includes(filters.status as (typeof IDEA_STATUSES)[number])) {
-    where.status = filters.status;
+    clauses.push({ status: filters.status });
+  }
+  if (filters.tag?.trim()) {
+    clauses.push({ tags: containsInsensitive(filters.tag.trim()) });
+  }
+  if (filters.technology?.trim()) {
+    clauses.push({ technologies: containsInsensitive(filters.technology.trim()) });
   }
 
-  return where;
+  if (clauses.length === 0) return {};
+  if (clauses.length === 1) return clauses[0];
+  return { AND: clauses };
 }
 
-export async function listIdeas(filters: IdeaFilters = {}): Promise<Idea[]> {
+/** `access` limits results to what a scoped (non-admin) user may see; defaults to everything. */
+export async function listIdeas(filters: IdeaFilters = {}, access: AccessScope = ALL_ACCESS): Promise<Idea[]> {
   const rows = await prisma.idea.findMany({
-    where: buildIdeaWhere(filters),
+    where: andWhere(buildIdeaWhere(filters), ideaScopeWhere(access)),
     orderBy: { createdAt: "desc" },
   });
   return rows.map(toIdea);
 }
 
-export async function getIdeaById(id: string): Promise<Idea | null> {
-  const row = await prisma.idea.findUnique({ where: { id } });
+export async function getIdeaById(id: string, access: AccessScope = ALL_ACCESS): Promise<Idea | null> {
+  const row = await prisma.idea.findFirst({ where: andWhere({ id }, ideaScopeWhere(access)) });
   return row ? toIdea(row) : null;
 }
 
@@ -68,8 +94,8 @@ export async function createIdea(rawInput: unknown): Promise<Idea> {
 }
 
 /** Partial update, same merge-then-revalidate pattern as updateProjectFields in projects.ts. */
-export async function updateIdeaFields(id: string, patch: unknown): Promise<Idea> {
-  const existingRow = await prisma.idea.findUnique({ where: { id } });
+export async function updateIdeaFields(id: string, patch: unknown, access: AccessScope = ALL_ACCESS): Promise<Idea> {
+  const existingRow = await prisma.idea.findFirst({ where: andWhere({ id }, ideaScopeWhere(access)) });
   if (!existingRow) {
     throw new IdeaNotFoundError(`Idea ${id} not found`);
   }
@@ -105,9 +131,12 @@ export async function updateIdeaFields(id: string, patch: unknown): Promise<Idea
   return toIdea(row);
 }
 
-export async function deleteIdeaById(id: string): Promise<void> {
+export async function deleteIdeaById(id: string, access: AccessScope = ALL_ACCESS): Promise<void> {
+  const visible = await prisma.idea.findFirst({ where: andWhere({ id }, ideaScopeWhere(access)), select: { id: true } });
+  if (!visible) throw new IdeaNotFoundError(`Idea ${id} not found`);
   try {
     await prisma.idea.delete({ where: { id } });
+    await removeTeam("IDEA", id);
   } catch (error) {
     if (error && typeof error === "object" && "code" in error && error.code === "P2025") {
       throw new IdeaNotFoundError(`Idea ${id} not found`);
@@ -125,8 +154,8 @@ export async function deleteIdeaById(id: string): Promise<void> {
  * the idea-side update ever failed after a successful project create, the
  * worst case is a harmless extra project the user can see and manage normally.
  */
-export async function promoteIdeaToProject(id: string) {
-  const idea = await getIdeaById(id);
+export async function promoteIdeaToProject(id: string, access: AccessScope = ALL_ACCESS) {
+  const idea = await getIdeaById(id, access);
   if (!idea) {
     throw new IdeaNotFoundError(`Idea ${id} not found`);
   }

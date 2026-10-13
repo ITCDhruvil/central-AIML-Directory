@@ -1,3 +1,4 @@
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { recordProjectActivity } from "@/lib/projectActivity";
@@ -61,6 +62,9 @@ function parseApplyRequest(body: unknown): ApplySyncRequest | null {
  * rejects with 409 if the project changed since the preview was generated.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("projects", "edit");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   let body: unknown;
@@ -75,7 +79,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "Invalid sync apply request" }, { status: 400 });
   }
 
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, auth.access);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }

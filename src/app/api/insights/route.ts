@@ -1,3 +1,5 @@
+import { guardedAi } from "@/lib/ai/guard";
+import { apiAuthorize, denyUnlessFullAccess } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { InsightsResponseError } from "@/lib/ai/insights";
 import { InsightsContextNotFoundError } from "@/lib/ai/insightsContext";
@@ -16,6 +18,11 @@ function extractProjectId(body: unknown): string | undefined {
  * so a refresh still shows the last generation.
  */
 export async function GET(request: NextRequest) {
+  const auth = await apiAuthorize("insights", "view");
+  if (!auth.ok) return auth.response;
+  const denied = denyUnlessFullAccess(auth);
+  if (denied) return denied;
+
   const projectId = request.nextUrl.searchParams.get("projectId")?.trim() || undefined;
   try {
     const snapshot = await getInsightSnapshot(insightScope(projectId));
@@ -30,7 +37,14 @@ export async function GET(request: NextRequest) {
  * Generates suggestions, then merges them into the saved catalog: matching
  * cards update in place, new ones are added, earlier cards are kept.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
+  const auth = await apiAuthorize("insights", "create");
+  if (!auth.ok) return auth.response;
+  const denied = denyUnlessFullAccess(auth);
+  if (denied) return denied;
+  const aiAuth = await apiAuthorize("ai_insights", "use");
+  if (!aiAuth.ok) return aiAuth.response;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -62,3 +76,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to generate insights" }, { status: 500 });
   }
 }
+
+// Master switch, per-feature switch, quota and usage log (see lib/ai/guard.ts).
+export const POST = guardedAi("ai_insights", handlePost);

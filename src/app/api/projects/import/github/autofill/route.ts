@@ -1,3 +1,5 @@
+import { guardedAi } from "@/lib/ai/guard";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModel } from "@/lib/ai/client";
@@ -26,7 +28,10 @@ function parseRepoFullName(value: string): { owner: string; repo: string } | nul
  * Opt-in per-field AI fill. Uses a client-supplied README when available
  * (post-import); otherwise fetches the README from GitHub for the given repo.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
+  const auth = await apiAuthorize("ai_github_autofill", "use");
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -123,3 +128,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to auto-fill" }, { status: 500 });
   }
 }
+
+// Master switch, per-feature switch, quota and usage log (see lib/ai/guard.ts).
+export const POST = guardedAi("ai_github_autofill", handlePost);

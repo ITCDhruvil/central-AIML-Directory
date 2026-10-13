@@ -59,6 +59,15 @@ export interface Project {
   createdAt: string;
   updatedAt: string;
   lastSyncedAt: string | null;
+  /** Team members (user accounts). Filled in by the list/detail loaders; absent when not loaded. */
+  team?: ProjectTeamMember[];
+}
+
+export interface ProjectTeamMember {
+  userId: string;
+  name: string;
+  /** OWNER | EDIT (Contributor) | VIEW (Viewer) */
+  role: "OWNER" | "EDIT" | "VIEW";
 }
 
 export interface ProjectInput {

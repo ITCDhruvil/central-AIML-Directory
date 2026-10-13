@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { MAX_CHAT_MESSAGES, MAX_CHAT_MESSAGE_LENGTH, ValidationError, validateChatMessages } from "@/lib/validation";
+import {
+  MAX_CHAT_ASSISTANT_LENGTH,
+  MAX_CHAT_MESSAGES,
+  MAX_CHAT_MESSAGE_LENGTH,
+  MAX_CHAT_TOOL_LENGTH,
+  ValidationError,
+  validateChatMessages,
+} from "@/lib/validation";
 
 test("accepts a normal user message", () => {
   const result = validateChatMessages({ messages: [{ role: "user", content: "list my projects" }] });
@@ -54,4 +61,27 @@ test("allows null content (assistant tool-call messages have no text)", () => {
     messages: [{ role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "x", arguments: "{}" } }] }],
   });
   assert.equal(result[0].content, null);
+});
+
+test("long assistant replies and tool results sent back as history are accepted", () => {
+  // A table of ten projects, or a full list_projects result, is well past what a person types.
+  const result = validateChatMessages({
+    messages: [
+      { role: "assistant", content: "a".repeat(MAX_CHAT_MESSAGE_LENGTH + 1000) },
+      { role: "tool", tool_call_id: "c1", content: "{" + "a".repeat(MAX_CHAT_MESSAGE_LENGTH + 5000) + "}" },
+    ],
+  });
+  assert.equal(result.length, 2);
+});
+
+test("assistant and tool messages still have a ceiling", () => {
+  assert.throws(() => validateChatMessages({ messages: [{ role: "assistant", content: "a".repeat(MAX_CHAT_ASSISTANT_LENGTH + 1) }] }), ValidationError);
+  assert.throws(
+    () => validateChatMessages({ messages: [{ role: "tool", tool_call_id: "c1", content: "a".repeat(MAX_CHAT_TOOL_LENGTH + 1) }] }),
+    ValidationError,
+  );
+});
+
+test("what a person types is still capped at the original limit", () => {
+  assert.throws(() => validateChatMessages({ messages: [{ role: "user", content: "a".repeat(MAX_CHAT_MESSAGE_LENGTH + 1) }] }), ValidationError);
 });

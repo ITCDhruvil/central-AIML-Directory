@@ -1,8 +1,12 @@
+import { guardedAi } from "@/lib/ai/guard";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModelWithTools } from "@/lib/ai/client";
 import { runChatbotTurn } from "@/lib/ai/chatbot";
-import { CHATBOT_TOOLS, CHATBOT_TOOL_HANDLERS } from "@/lib/ai/chatbotTools";
+import { buildChatbotContext } from "@/lib/ai/chatbotContext";
+import { buildSystemPrompt } from "@/lib/ai/chatbotContextPrompt";
+import { chatbotToolsFor, createChatbotToolHandlers } from "@/lib/ai/chatbotTools";
 import { AIProviderError } from "@/lib/ai/types";
 import { ValidationError, validateChatMessages } from "@/lib/validation";
 
@@ -12,7 +16,10 @@ import { ValidationError, validateChatMessages } from "@/lib/validation";
  * tool-calling loop against real project data, and returns only the new
  * messages produced this turn for the browser to append to its own history.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
+  const auth = await apiAuthorize("ai_chatbot", "use");
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -39,7 +46,16 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const newMessages = await runChatbotTurn(messages, config, callAssistantModelWithTools, CHATBOT_TOOLS, CHATBOT_TOOL_HANDLERS);
+    // Tools and their data access are bound to the signed-in user, never shared across users.
+    const ctx = await buildChatbotContext(auth.user);
+    const newMessages = await runChatbotTurn(
+      messages,
+      config,
+      callAssistantModelWithTools,
+      chatbotToolsFor(ctx),
+      createChatbotToolHandlers(ctx),
+      buildSystemPrompt({ user: ctx.user, roleDefaults: ctx.roleDefaults }),
+    );
     return NextResponse.json({ messages: newMessages });
   } catch (error) {
     if (error instanceof AIProviderError) {
@@ -50,3 +66,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to process the message" }, { status: 500 });
   }
 }
+
+// Master switch, per-feature switch, quota and usage log (see lib/ai/guard.ts).
+export const POST = guardedAi("ai_chatbot", handlePost);

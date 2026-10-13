@@ -194,12 +194,14 @@ export function GlobalSearch({
             if (trimmed) setOpen(true);
           }}
           placeholder="Search"
-          className="w-full rounded-xl bg-zinc-100 py-2 pl-8 pr-12 text-[13px] text-zinc-800 placeholder:text-zinc-400 outline-none ring-0 transition-shadow focus:ring-2 focus:ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-zinc-700"
+          className="w-full rounded-xl bg-zinc-100 py-2 pl-8 pr-[4.75rem] text-[13px] text-zinc-800 placeholder:text-zinc-400 outline-none ring-0 transition-shadow focus:ring-2 focus:ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:ring-zinc-700"
           autoComplete="off"
         />
-        <kbd className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 rounded-md bg-white px-1.5 py-0.5 text-[10px] font-medium text-zinc-400 ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-700">
-          ⌘K
-        </kbd>
+        {!q && (
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 bg-transparent font-sans text-[11px] font-normal text-zinc-400">
+            ctrl + K
+          </kbd>
+        )}
       </div>
     </form>
   );
@@ -216,11 +218,11 @@ export function GlobalSearch({
             requestAnimationFrame(() => inputRef.current?.focus());
           }}
           className={cn(
-            "flex h-9 w-9 items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
+            "flex h-10 w-10 items-center justify-center rounded-xl text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
             iconOpen && "bg-zinc-100 text-zinc-800 dark:bg-zinc-800 dark:text-zinc-100",
           )}
         >
-          <Search size={18} strokeWidth={1.75} />
+          <Search size={21} strokeWidth={1.75} />
         </button>
         {iconOpen && (
           <div className="absolute left-full top-0 z-50 ml-2 w-80 rounded-2xl bg-white p-2 shadow-[0_8px_30px_rgba(24,24,27,0.12)] ring-1 ring-zinc-200/80 dark:bg-zinc-900 dark:ring-zinc-800">

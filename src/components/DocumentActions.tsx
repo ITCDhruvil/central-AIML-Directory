@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Trash2 } from "lucide-react";
+import { useCan } from "@/components/AuthProvider";
 import { Button } from "@/components/ui/Button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
@@ -16,6 +17,8 @@ export function DocumentActions({
   title: string;
 }) {
   const router = useRouter();
+  const canEdit = useCan("documents", "edit");
+  const canDelete = useCan("documents", "delete");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,12 +47,16 @@ export function DocumentActions({
   return (
     <div>
       <div className="flex gap-2">
-        <Button href={`/projects/${projectId}/documents/${documentId}/edit`} variant="secondary" icon={Pencil}>
-          Edit
-        </Button>
-        <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
-          Delete
-        </Button>
+        {canEdit && (
+          <Button href={`/projects/${projectId}/documents/${documentId}/edit`} variant="secondary" icon={Pencil}>
+            Edit
+          </Button>
+        )}
+        {canDelete && (
+          <Button variant="danger" icon={Trash2} onClick={() => setConfirmOpen(true)}>
+            Delete
+          </Button>
+        )}
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
       <ConfirmDialog

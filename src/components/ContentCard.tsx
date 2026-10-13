@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { LucideIcon } from "lucide-react";
+import { ArrowRight, ExternalLink, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/cn";
 
 export type CardTone = "rose" | "sky" | "amber" | "emerald" | "violet";
@@ -84,7 +84,7 @@ export function ContentCard({
         )}
       </div>
 
-      <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+      <div className="flex items-center justify-between gap-3 pb-1 pl-3 pt-2.5">
         <p className="min-w-0 truncate text-sm text-zinc-500 dark:text-zinc-400">{footerLeft}</p>
         <div className="flex shrink-0 items-center gap-1.5">
           {menu}
@@ -97,10 +97,12 @@ export function ContentCard({
               className={CARD_SECONDARY_CTA_CLASS}
             >
               Visit
+              <ExternalLink size={14} aria-hidden />
             </a>
           )}
           <Link href={href} className={CARD_CTA_CLASS}>
             Explore
+            <ArrowRight size={14} aria-hidden />
           </Link>
         </div>
       </div>

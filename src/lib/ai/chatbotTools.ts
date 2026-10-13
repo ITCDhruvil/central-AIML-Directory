@@ -1,19 +1,23 @@
+﻿import { isSelf } from "@/lib/ai/selfMatch";
 import "server-only";
 import { callAssistantModel } from "@/lib/ai/client";
 import { getAIConfig } from "@/lib/ai/config";
 import { autofillProjectImport } from "@/lib/ai/importAutofill";
-import type { ToolDefinition } from "@/lib/ai/chatTypes";
 import { GitHubApiError, fetchRepositoryReadme } from "@/lib/github/client";
 import { parseGitHubRepoUrl } from "@/lib/github/parseUrl";
 import { InsightsResponseError } from "@/lib/ai/insights";
 import { InsightsContextNotFoundError } from "@/lib/ai/insightsContext";
-import { generateAndPersistInsights, InsightsNotConfiguredError } from "@/lib/ai/runInsights";
+import {
+  generateAndPersistInsights,
+  InsightsNotConfiguredError,
+} from "@/lib/ai/runInsights";
 import {
   CATALOG_INSIGHT_SCOPE,
   getInsightById,
   getInsightSnapshot,
   InsightNotFoundError,
   insightScope,
+  listInsights,
   saveInsightAsIdea,
 } from "@/lib/insightCatalog";
 import {
@@ -26,8 +30,34 @@ import {
   updateIdeaFields,
 } from "@/lib/ideas";
 import { listOwners } from "@/lib/owners";
+import { ownerNameMatches } from "@/lib/ownerSearch";
 import { portfolioSnapshot } from "@/lib/portfolioSnapshot";
 import { ideasSnapshot, insightsPulse } from "@/lib/workspaceSnapshot";
+import {
+  getDocumentationRecord,
+  listDocumentation,
+  searchDocumentation,
+  type DocumentationWithProject,
+} from "@/lib/documents";
+import {
+  listRecentProjectActivities,
+  searchProjectActivities,
+} from "@/lib/projectActivity";
+import { buildSnippet, tokenize } from "@/lib/search/matcher";
+import { CHATBOT_TOOLS, OPEN_PAGES } from "@/lib/ai/chatbotToolDefs";
+import {
+  describeRequirement,
+  toolAvailable,
+  toolsFor,
+} from "@/lib/ai/chatbotAccess";
+import { buildAdminHandlers } from "@/lib/ai/chatbotAdminHandlers";
+import { buildTeamHandlers } from "@/lib/ai/chatbotTeamHandlers";
+import { memberRoleLabel } from "@/lib/auth/membership";
+import { addCreatorAsOwner } from "@/lib/projectTeam";
+import type { ChatbotContext } from "@/lib/ai/chatbotContext";
+import { withOwnerDefault } from "@/lib/auth/ownerDefault";
+import { can, scopeFor } from "@/lib/auth/permissions";
+import type { AccessScope } from "@/lib/auth/scope";
 import {
   ProjectNotFoundError,
   createProject,
@@ -37,10 +67,12 @@ import {
   updateProjectFields,
 } from "@/lib/projects";
 import { ValidationError } from "@/lib/validation";
-import { IDEA_STATUSES, type Idea } from "@/types/idea";
+import type { Idea } from "@/types/idea";
 import type { Insight } from "@/types/insight";
-import { PROJECT_STAGES, PROJECT_STATUSES, PROJECT_TYPES, type Project } from "@/types/project";
+import type { Project } from "@/types/project";
 import type { ThemePreference } from "@/lib/theme";
+
+export { CHATBOT_TOOLS };
 
 function str(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -50,9 +82,11 @@ function compactIdea(idea: Idea) {
   return {
     id: idea.id,
     name: idea.name,
+    slug: idea.slug,
     status: idea.status,
     owner: idea.owner,
     tags: idea.tags,
+    technologies: idea.technologies.map((t) => t.name),
     promotedProjectId: idea.promotedProjectId,
   };
 }
@@ -61,7 +95,6 @@ function fullIdea(idea: Idea) {
   return {
     ...compactIdea(idea),
     description: idea.description,
-    technologies: idea.technologies.map((t) => t.name),
     createdAt: idea.createdAt,
     updatedAt: idea.updatedAt,
   };
@@ -79,27 +112,36 @@ function compactInsight(insight: Insight) {
   };
 }
 
-async function resolveIdea(args: Record<string, unknown>): Promise<Idea | null> {
+async function resolveIdea(
+  args: Record<string, unknown>,
+  access: AccessScope,
+): Promise<Idea | null> {
   const id = str(args.id);
-  if (id) return getIdeaById(id);
+  if (id) return getIdeaById(id, access);
 
   const name = str(args.name);
   if (!name) return null;
-  const matches = await listIdeas({ q: name });
-  return matches.find((idea) => idea.name.toLowerCase() === name.toLowerCase()) ?? matches[0] ?? null;
+  const matches = await listIdeas({ q: name }, access);
+  return (
+    matches.find((idea) => idea.name.toLowerCase() === name.toLowerCase()) ??
+    matches[0] ??
+    null
+  );
 }
 
-async function resolveInsight(args: Record<string, unknown>): Promise<Insight | null> {
+async function resolveInsight(
+  args: Record<string, unknown>,
+): Promise<Insight | null> {
   const id = str(args.id);
   if (id) return getInsightById(id);
 
   const title = str(args.title);
   if (!title) return null;
-  const snapshot = await getInsightSnapshot(CATALOG_INSIGHT_SCOPE);
+  const matches = await listInsights({ q: title });
   const needle = title.toLowerCase();
   return (
-    snapshot.insights.find((insight) => insight.title.toLowerCase() === needle) ??
-    snapshot.insights.find((insight) => insight.title.toLowerCase().includes(needle)) ??
+    matches.find((insight) => insight.title.toLowerCase() === needle) ??
+    matches.find((insight) => insight.title.toLowerCase().includes(needle)) ??
     null
   );
 }
@@ -108,311 +150,129 @@ function compactProject(project: Project) {
   return {
     id: project.id,
     name: project.name,
+    slug: project.slug,
     type: project.type,
     status: project.status,
     stage: project.stage,
     owner: project.owner,
     tags: project.tags,
+    technologies: project.technologies.map((t) => t.name),
     githubUrl: project.githubUrl,
+    githubRepo: project.githubRepo,
+    deploymentUrls: project.deploymentUrls,
   };
 }
 
-function fullProject(project: Project) {
+function fullProject(
+  project: Project,
+  extras: {
+    documents: {
+      id: string;
+      title: string;
+      category: string;
+      filePath: string;
+      source: string;
+    }[];
+    recentActivity: { type: string; title: string; createdAt: string }[];
+  },
+) {
   return {
     ...compactProject(project),
     description: project.description,
-    technologies: project.technologies.map((t) => t.name),
-    deploymentUrls: project.deploymentUrls,
+    githubOwner: project.githubOwner,
+    defaultBranch: project.defaultBranch,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
+    lastSyncedAt: project.lastSyncedAt,
+    team: (project.team ?? []).map((m) => ({
+      name: m.name,
+      role: memberRoleLabel(m.role),
+    })),
+    documents: extras.documents,
+    recentActivity: extras.recentActivity,
   };
 }
 
-async function resolveProject(args: Record<string, unknown>): Promise<Project | null> {
+function documentSnippet(content: string, q: string): string | null {
+  const tokens = tokenize(q);
+  if (tokens.length === 0) return null;
+  return buildSnippet(content, tokens)
+    .map((segment) => segment.text)
+    .join("");
+}
+
+function compactDocument(doc: DocumentationWithProject, q?: string) {
+  return {
+    id: doc.id,
+    projectId: doc.projectId,
+    projectName: doc.projectName,
+    title: doc.title,
+    category: doc.category,
+    filePath: doc.filePath,
+    source: doc.source,
+    href: `/projects/${doc.projectId}/documents/${doc.id}`,
+    snippet: q ? documentSnippet(doc.content, q) : null,
+  };
+}
+
+const DOCUMENT_CONTENT_MAX = 12_000;
+
+function fullDocument(doc: DocumentationWithProject) {
+  const truncated = doc.content.length > DOCUMENT_CONTENT_MAX;
+  return {
+    id: doc.id,
+    projectId: doc.projectId,
+    projectName: doc.projectName,
+    title: doc.title,
+    category: doc.category,
+    filePath: doc.filePath,
+    source: doc.source,
+    href: `/projects/${doc.projectId}/documents/${doc.id}`,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+    truncated,
+    content: truncated
+      ? doc.content.slice(0, DOCUMENT_CONTENT_MAX)
+      : doc.content,
+  };
+}
+
+async function resolveProject(
+  args: Record<string, unknown>,
+  access: AccessScope,
+): Promise<Project | null> {
   const id = str(args.id);
-  if (id) return getProjectById(id);
+  if (id) return getProjectById(id, access);
 
   const name = str(args.name);
   if (!name) return null;
-  const matches = await listProjects({ q: name });
-  return matches.find((p) => p.name.toLowerCase() === name.toLowerCase()) ?? matches[0] ?? null;
+  const matches = await listProjects({ q: name }, access);
+  return (
+    matches.find((p) => p.name.toLowerCase() === name.toLowerCase()) ??
+    matches[0] ??
+    null
+  );
 }
 
-const PROJECT_FIELD_PROPERTIES = {
-  description: { type: "string", description: "Markdown description" },
-  type: { type: "string", enum: [...PROJECT_TYPES] },
-  status: { type: "string", enum: [...PROJECT_STATUSES] },
-  stage: { type: "string", enum: [...PROJECT_STAGES] },
-  owner: { type: "string" },
-  githubUrl: { type: "string" },
-  tags: { type: "array", items: { type: "string" } },
-  technologies: { type: "array", items: { type: "string" }, description: "Technology names, e.g. [\"React\", \"Python\"]" },
-  deploymentUrls: { type: "array", items: { type: "string" } },
-} as const;
+async function resolveDocument(
+  args: Record<string, unknown>,
+  access: AccessScope,
+): Promise<DocumentationWithProject | null> {
+  const id = str(args.id);
+  if (id) return getDocumentationRecord(id, access);
 
-const IDEA_FIELD_PROPERTIES = {
-  description: { type: "string", description: "Markdown description" },
-  status: { type: "string", enum: [...IDEA_STATUSES] },
-  owner: { type: "string" },
-  tags: { type: "array", items: { type: "string" } },
-  technologies: { type: "array", items: { type: "string" }, description: "Technology names, e.g. [\"Python\", \"RAG\"]" },
-} as const;
-
-const OPEN_PAGES = {
-  dashboard: { href: "/", label: "Open dashboard" },
-  projects: { href: "/projects", label: "Browse projects" },
-  ideas: { href: "/ideas", label: "Browse ideas" },
-  insights: { href: "/insights", label: "Open insights" },
-  settings: { href: "/settings", label: "Open settings" },
-  new_project: { href: "/projects/new", label: "Open New Project form" },
-  new_idea: { href: "/ideas/new", label: "Open New Idea form" },
-} as const;
-
-export const CHATBOT_TOOLS: ToolDefinition[] = [
-  {
-    type: "function",
-    function: {
-      name: "list_projects",
-      description: "List or search the user's projects, optionally filtered by free-text query, type, or status. Use this to answer 'what projects do I have', to find a project's id, or to check for name collisions before creating one.",
-      parameters: {
-        type: "object",
-        properties: {
-          q: { type: "string", description: "Free-text search over name and description" },
-          type: { type: "string", enum: [...PROJECT_TYPES] },
-          status: { type: "string", enum: [...PROJECT_STATUSES] },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_project",
-      description: "Get full details (description, technologies, deployment URLs, timestamps) for one project by id or by name.",
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          name: { type: "string" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "draft_project_from_github",
-      description: "Given a GitHub repository URL, fetches the repo and drafts a project name, description, and technology list from its README and file structure. Does NOT save anything — show the draft to the user and get their OK before calling create_project. Call this the moment the user gives you a GitHub URL while creating a project.",
-      parameters: {
-        type: "object",
-        properties: { repoUrl: { type: "string", description: "A github.com/owner/repo URL" } },
-        required: ["repoUrl"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_project",
-      description: "Creates and saves a new project. Only `name` is required. Prefer calling draft_project_from_github first and passing its draft values through here when the user has a GitHub repo.",
-      parameters: {
-        type: "object",
-        properties: { name: { type: "string" }, ...PROJECT_FIELD_PROPERTIES },
-        required: ["name"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_project",
-      description: "Updates one or more fields on an existing project — e.g. change status, stage, owner, description, tags, or technologies. Only include fields that are actually changing.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string", description: "Project id from list_projects/get_project" }, name: { type: "string" }, ...PROJECT_FIELD_PROPERTIES },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "delete_project",
-      description: "Permanently deletes a project. DESTRUCTIVE. Call once with confirm omitted or false first — it will return the project's name without deleting anything. Only call again with confirm:true after the user explicitly confirms in their own words.",
-      parameters: {
-        type: "object",
-        properties: {
-          id: { type: "string" },
-          confirm: { type: "boolean" },
-        },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_ideas",
-      description: "List or search captured ideas, optionally filtered by free-text query or status. Use this for 'what ideas do I have', to find an idea's id, or before creating one to check for a similar name.",
-      parameters: {
-        type: "object",
-        properties: {
-          q: { type: "string", description: "Free-text search over name and description" },
-          status: { type: "string", enum: [...IDEA_STATUSES] },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_idea",
-      description: "Get full details for one idea by id or by name.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, name: { type: "string" } },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "create_idea",
-      description: "Creates and saves a new idea. Only `name` is required. Status defaults to ACTIVE.",
-      parameters: {
-        type: "object",
-        properties: { name: { type: "string" }, ...IDEA_FIELD_PROPERTIES },
-        required: ["name"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "update_idea",
-      description: "Updates one or more fields on an existing idea. Only include fields that are actually changing.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, name: { type: "string" }, ...IDEA_FIELD_PROPERTIES },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "promote_idea",
-      description: "Turns an idea into a real project (copies name/description/tags/tech, marks the idea PROMOTED). DESTRUCTIVE to the idea's status. Call once with confirm omitted or false first. Only call again with confirm:true after the user explicitly confirms.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, confirm: { type: "boolean" } },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "delete_idea",
-      description: "Permanently deletes an idea. DESTRUCTIVE. Call once with confirm omitted or false first. Only call again with confirm:true after the user explicitly confirms.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, confirm: { type: "boolean" } },
-        required: ["id"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_dashboard",
-      description: "Workspace snapshot for the dashboard: project counts by status plus GitHub/deploy coverage, idea counts by status, and saved insights (new ideas vs improvements, last generated). Use this for 'how's the portfolio', 'summarize the dashboard', or overview questions.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_insights",
-      description: "List saved AI insights (catalog-wide, or scoped to one project). Use this to answer 'what insights do I have' or to find an insight id before saving it as an idea.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectId: { type: "string" },
-          projectName: { type: "string", description: "Resolve a project by name when the user didn't give an id" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "get_insight",
-      description: "Get one insight's full reasoning by id or title.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, title: { type: "string" } },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "save_insight_as_idea",
-      description: "Saves an insight as a new idea (same as the Insights page 'Save as idea' button). Idempotent if it was already saved.",
-      parameters: {
-        type: "object",
-        properties: { id: { type: "string" }, title: { type: "string" } },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "generate_insights",
-      description: "Runs the Insights generator (catalog-wide, or for one project) and saves the results. Slow — it may search the web. Tell the user you're generating, then call this. Do not invent insights yourself.",
-      parameters: {
-        type: "object",
-        properties: {
-          projectId: { type: "string" },
-          projectName: { type: "string" },
-        },
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "list_owners",
-      description: "List saved owner names used on project and idea forms.",
-      parameters: { type: "object", properties: {} },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "set_appearance",
-      description: "Change this browser's appearance (light, dark, or system). Settings are local to this device — the tool asks the chat UI to apply the theme.",
-      parameters: {
-        type: "object",
-        properties: { theme: { type: "string", enum: ["light", "dark", "system"] } },
-        required: ["theme"],
-      },
-    },
-  },
-  {
-    type: "function",
-    function: {
-      name: "open_page",
-      description: "Open a real app page (dashboard, projects, ideas, insights, settings, or a new-item form) via a button under your reply. Use when the user asks to go somewhere, or when they need a form you shouldn't fake in chat.",
-      parameters: {
-        type: "object",
-        properties: { page: { type: "string", enum: Object.keys(OPEN_PAGES) } },
-        required: ["page"],
-      },
-    },
-  },
-];
+  const title = str(args.title);
+  if (!title) return null;
+  const projectId = str(args.projectId) || undefined;
+  const matches = await searchDocumentation({ q: title, projectId }, access);
+  const needle = title.toLowerCase();
+  return (
+    matches.find((doc) => doc.title.toLowerCase() === needle) ??
+    matches.find((doc) => doc.title.toLowerCase().includes(needle)) ??
+    matches[0] ??
+    null
+  );
+}
 
 /**
  * A UI button the chatbot panel renders under its reply whenever a tool
@@ -431,12 +291,17 @@ const OPEN_DASHBOARD_FALLBACK = linkFallback("/", "Open dashboard");
 const OPEN_SETTINGS_FALLBACK = linkFallback("/settings", "Open settings");
 
 /** Deep-link to the New Project form, optionally pre-filled with whatever we already know. */
-function newProjectFormFallback(prefill: { name?: string; githubUrl?: string } = {}) {
+function newProjectFormFallback(
+  prefill: { name?: string; githubUrl?: string } = {},
+) {
   const params = new URLSearchParams();
   if (prefill.name) params.set("name", prefill.name);
   if (prefill.githubUrl) params.set("githubUrl", prefill.githubUrl);
   const qs = params.toString();
-  return linkFallback(`/projects/new${qs ? `?${qs}` : ""}`, "Open New Project form");
+  return linkFallback(
+    `/projects/new${qs ? `?${qs}` : ""}`,
+    "Open New Project form",
+  );
 }
 
 function editProjectFormFallback(id: string) {
@@ -470,15 +335,19 @@ async function handleDraftProjectFromGithub(args: Record<string, unknown>) {
   const parsed = repoUrl ? parseGitHubRepoUrl(repoUrl) : null;
   if (!parsed) {
     return {
-      error: "That doesn't look like a valid GitHub repository URL (expected https://github.com/owner/repo).",
-      ...(repoUrl ? { fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }) } : {}),
+      error:
+        "That doesn't look like a valid GitHub repository URL (expected https://github.com/owner/repo).",
+      ...(repoUrl
+        ? { fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }) }
+        : {}),
     };
   }
 
   const config = getAIConfig();
   if (!config) {
     return {
-      error: "AI is not configured on this server, so I can't draft from a README right now.",
+      error:
+        "AI is not configured on this server, so I can't draft from a README right now.",
       fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }),
     };
   }
@@ -502,10 +371,14 @@ async function handleDraftProjectFromGithub(args: Record<string, unknown>) {
 
     return {
       draft: {
-        name: autofill.target === "all" && autofill.name ? autofill.name : parsed.repo,
+        name:
+          autofill.target === "all" && autofill.name
+            ? autofill.name
+            : parsed.repo,
         description: autofill.target === "all" ? autofill.description : "",
         tags: autofill.target === "all" ? autofill.tags : [],
-        technologies: autofill.target === "all" ? autofill.suggestedTechnologies : [],
+        technologies:
+          autofill.target === "all" ? autofill.suggestedTechnologies : [],
         githubUrl: `https://github.com/${parsed.owner}/${parsed.repo}`,
         githubOwner: parsed.owner,
         githubRepo: parsed.repo,
@@ -513,10 +386,16 @@ async function handleDraftProjectFromGithub(args: Record<string, unknown>) {
     };
   } catch (error) {
     if (error instanceof GitHubApiError) {
-      return { error: error.message, fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }) };
+      return {
+        error: error.message,
+        fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }),
+      };
     }
     return {
-      error: error instanceof Error ? error.message : "Failed to import the repository.",
+      error:
+        error instanceof Error
+          ? error.message
+          : "Failed to import the repository.",
       fallbackAction: newProjectFormFallback({ githubUrl: repoUrl }),
     };
   }
@@ -538,255 +417,658 @@ function withFallback(
   };
 }
 
-const RAW_CHATBOT_TOOL_HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = {
-  list_projects: async (args) => {
-    const projects = await listProjects({ q: str(args.q) || undefined, type: str(args.type) || undefined, status: str(args.status) || undefined });
-    return { count: projects.length, projects: projects.map(compactProject) };
-  },
+type ToolHandlerMap = Record<
+  string,
+  (args: Record<string, unknown>) => Promise<unknown>
+>;
 
-  get_project: async (args) => {
-    const project = await resolveProject(args);
-    if (!project) return { error: "No matching project found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-    return { project: fullProject(project) };
-  },
+/** Handlers bound to one signed-in user: every read and write goes through that user's access scopes. */
+function buildRawHandlers(ctx: ChatbotContext): ToolHandlerMap {
+  const { user, view, edit, remove } = ctx;
+  const adminHandlers = buildAdminHandlers(ctx);
+  const teamHandlers = buildTeamHandlers(ctx);
+  const allowed = (resource: string, action: string) =>
+    can(user.permissions, resource, action);
+  const insightsAll = scopeFor(user.permissions, "insights", "view") === "ALL";
 
-  draft_project_from_github: handleDraftProjectFromGithub,
-
-  create_project: async (args) => {
-    try {
-      const project = await createProject(args);
-      return { created: true, project: compactProject(project) };
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        return { error: "Validation failed", details: error.errors, fallbackAction: newProjectFormFallback({ name: str(args.name) }) };
-      }
-      throw error;
-    }
-  },
-
-  update_project: async (args) => {
-    const id = str(args.id);
-    if (!id) return { error: "id is required — call list_projects or get_project first to find it.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-    try {
-      const project = await updateProjectFields(id, args);
-      return { updated: true, project: compactProject(project) };
-    } catch (error) {
-      if (error instanceof ProjectNotFoundError) return { error: "Project not found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-      if (error instanceof ValidationError) {
-        return { error: "Validation failed", details: error.errors, fallbackAction: editProjectFormFallback(id) };
-      }
-      throw error;
-    }
-  },
-
-  delete_project: async (args) => {
-    const id = str(args.id);
-    if (!id) return { error: "id is required.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-    const project = await getProjectById(id);
-    if (!project) return { error: "Project not found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-
-    if (args.confirm !== true) {
-      return { requiresConfirmation: true, project: { id: project.id, name: project.name } };
-    }
-
-    await deleteProjectById(id);
-    return { deleted: true, id, name: project.name };
-  },
-
-  list_ideas: async (args) => {
-    const ideas = await listIdeas({
-      q: str(args.q) || undefined,
-      status: str(args.status) || undefined,
-    });
-    return { count: ideas.length, ideas: ideas.map(compactIdea), related: { href: "/ideas", name: "Ideas" } };
-  },
-
-  get_idea: async (args) => {
-    const idea = await resolveIdea(args);
-    if (!idea) return { error: "No matching idea found.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    return { idea: fullIdea(idea) };
-  },
-
-  create_idea: async (args) => {
-    try {
-      const idea = await createIdea(args);
-      return { created: true, idea: compactIdea(idea) };
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        return { error: "Validation failed", details: error.errors, fallbackAction: newIdeaFormFallback({ name: str(args.name) }) };
-      }
-      throw error;
-    }
-  },
-
-  update_idea: async (args) => {
-    const id = str(args.id);
-    if (!id) return { error: "id is required — call list_ideas or get_idea first to find it.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    try {
-      const idea = await updateIdeaFields(id, args);
-      return { updated: true, idea: compactIdea(idea) };
-    } catch (error) {
-      if (error instanceof IdeaNotFoundError) return { error: "Idea not found.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-      if (error instanceof ValidationError) {
-        return { error: "Validation failed", details: error.errors, fallbackAction: editIdeaFormFallback(id) };
-      }
-      throw error;
-    }
-  },
-
-  promote_idea: async (args) => {
-    const id = str(args.id);
-    if (!id) return { error: "id is required.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    const idea = await getIdeaById(id);
-    if (!idea) return { error: "Idea not found.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    if (idea.status === "PROMOTED") {
+  return {
+    search_workspace: async (args) => {
+      const q = str(args.q);
+      if (!q) return { error: "q is required." };
+      const [projects, ideas, documents, insights, owners, activities] =
+        await Promise.all([
+          allowed("projects", "view") ? listProjects({ q }, view.projects) : [],
+          allowed("ideas", "view") ? listIdeas({ q }, view.ideas) : [],
+          allowed("documents", "view")
+            ? searchDocumentation({ q }, view.documents)
+            : [],
+          insightsAll ? listInsights({ q }) : [],
+          allowed("owners", "view") ? listOwners() : [],
+          allowed("projects", "view")
+            ? searchProjectActivities({ q }, 30, view.projects)
+            : [],
+        ]);
+      const matchedOwners = owners.filter((owner) =>
+        ownerNameMatches(owner.name, q),
+      );
       return {
-        error: "This idea has already been promoted.",
-        idea: compactIdea(idea),
-        fallbackAction: idea.promotedProjectId
-          ? linkFallback(`/projects/${idea.promotedProjectId}`, "Open the project")
-          : BROWSE_IDEAS_FALLBACK,
+        query: q,
+        projects: {
+          count: projects.length,
+          items: projects.slice(0, 20).map(compactProject),
+        },
+        ideas: {
+          count: ideas.length,
+          items: ideas.slice(0, 20).map(compactIdea),
+        },
+        documents: {
+          count: documents.length,
+          items: documents.slice(0, 20).map((doc) => compactDocument(doc, q)),
+        },
+        insights: {
+          count: insights.length,
+          items: insights.slice(0, 20).map(compactInsight),
+        },
+        owners: {
+          count: matchedOwners.length,
+          items: matchedOwners.slice(0, 20),
+        },
+        activities: {
+          count: activities.length,
+          items: activities.slice(0, 20),
+        },
       };
-    }
-    if (args.confirm !== true) {
-      return { requiresConfirmation: true, action: "promote", idea: { id: idea.id, name: idea.name } };
-    }
-    try {
-      const result = await promoteIdeaToProject(id);
-      return { promoted: true, idea: compactIdea(result.idea), project: compactProject(result.project) };
-    } catch (error) {
-      if (error instanceof ValidationError) {
-        return { error: "Validation failed", details: error.errors, fallbackAction: BROWSE_IDEAS_FALLBACK };
+    },
+
+    list_projects: async (args) => {
+      const owner = str(args.owner) || undefined;
+      const filters = {
+        q: str(args.q) || undefined,
+        type: str(args.type) || undefined,
+        status: str(args.status) || undefined,
+        stage: str(args.stage) || undefined,
+        tag: str(args.tag) || undefined,
+        technology: str(args.technology) || undefined,
+      };
+      let projects = await listProjects({ ...filters, owner }, view.projects);
+      let note: string | undefined;
+      let hint: string | undefined;
+      if (owner && projects.length === 0) {
+        // "my projects" often arrives as the person's own name. If nothing is owned under it, show what they can see.
+        const visible = await listProjects(filters, view.projects);
+        if (visible.length > 0) {
+          if (isSelf(owner, user)) {
+            projects = visible;
+            note =
+              "No projects list you as the owner by name, so this is every project you can see.";
+          } else {
+            hint = `No project has an owner matching "${owner}", but ${visible.length} match the other filters. Check list_owners for the saved name.`;
+          }
+        }
       }
-      throw error;
-    }
-  },
-
-  delete_idea: async (args) => {
-    const id = str(args.id);
-    if (!id) return { error: "id is required.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    const idea = await getIdeaById(id);
-    if (!idea) return { error: "Idea not found.", fallbackAction: BROWSE_IDEAS_FALLBACK };
-    if (args.confirm !== true) {
-      return { requiresConfirmation: true, action: "delete", idea: { id: idea.id, name: idea.name } };
-    }
-    await deleteIdeaById(id);
-    return { deleted: true, id, name: idea.name };
-  },
-
-  get_dashboard: async () => {
-    const [projects, ideaRows, insightSnap] = await Promise.all([
-      listProjects(),
-      listIdeas(),
-      getInsightSnapshot(CATALOG_INSIGHT_SCOPE),
-    ]);
-    const snapshot = portfolioSnapshot(projects);
-    const ideas = ideasSnapshot(ideaRows);
-    const insights = insightsPulse(insightSnap);
-    return {
-      dashboard: {
-        projects: snapshot,
-        ideas,
-        insights: { saved: insights.total, ...insights },
-      },
-      related: { href: "/", name: "Dashboard" },
-    };
-  },
-
-  list_insights: async (args) => {
-    let projectId = str(args.projectId) || undefined;
-    const projectName = str(args.projectName);
-    if (!projectId && projectName) {
-      const project = await resolveProject({ name: projectName });
-      if (!project) return { error: "No matching project found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-      projectId = project.id;
-    }
-    const snapshot = await getInsightSnapshot(insightScope(projectId));
-    return {
-      count: snapshot.insights.length,
-      generation: snapshot.generation,
-      insights: snapshot.insights.map(compactInsight),
-      related: { href: projectId ? `/projects/${projectId}` : "/insights", name: "Insights" },
-    };
-  },
-
-  get_insight: async (args) => {
-    const insight = await resolveInsight(args);
-    if (!insight) return { error: "No matching insight found.", fallbackAction: OPEN_INSIGHTS_FALLBACK };
-    return { insight };
-  },
-
-  save_insight_as_idea: async (args) => {
-    const insight = await resolveInsight(args);
-    if (!insight) return { error: "No matching insight found.", fallbackAction: OPEN_INSIGHTS_FALLBACK };
-    try {
-      const saved = await saveInsightAsIdea(insight.id);
-      return { savedAsIdea: true, insight: compactInsight(saved), related: { href: "/ideas", name: "Ideas" } };
-    } catch (error) {
-      if (error instanceof InsightNotFoundError) return { error: "Insight not found.", fallbackAction: OPEN_INSIGHTS_FALLBACK };
-      throw error;
-    }
-  },
-
-  generate_insights: async (args) => {
-    let projectId = str(args.projectId) || undefined;
-    const projectName = str(args.projectName);
-    if (!projectId && projectName) {
-      const project = await resolveProject({ name: projectName });
-      if (!project) return { error: "No matching project found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
-      projectId = project.id;
-    }
-    try {
-      const snapshot = await generateAndPersistInsights(projectId);
       return {
-        generated: true,
-        added: snapshot.generation?.addedCount ?? 0,
-        updated: snapshot.generation?.updatedCount ?? 0,
-        unchanged: snapshot.generation?.unchangedCount ?? 0,
-        insights: snapshot.insights.map(compactInsight),
-        related: { href: projectId ? `/projects/${projectId}` : "/insights", name: "Insights" },
+        count: projects.length,
+        projects: projects.map(compactProject),
+        ...(note ? { note } : {}),
+        ...(hint ? { hint } : {}),
       };
-    } catch (error) {
-      if (error instanceof InsightsNotConfiguredError) {
-        return { error: "AI is not configured, so I can't generate insights right now.", fallbackAction: OPEN_INSIGHTS_FALLBACK };
+    },
+
+    get_project: async (args) => {
+      const project = await resolveProject(args, view.projects);
+      if (!project)
+        return {
+          error: "No matching project found.",
+          fallbackAction: BROWSE_PROJECTS_FALLBACK,
+        };
+      const [documents, recentActivity] = await Promise.all([
+        allowed("documents", "view")
+          ? listDocumentation(project.id, view.documents)
+          : [],
+        listRecentProjectActivities(project.id, 20),
+      ]);
+      return {
+        project: fullProject(project, {
+          documents: documents.map((doc) => ({
+            id: doc.id,
+            title: doc.title,
+            category: doc.category,
+            filePath: doc.filePath,
+            source: doc.source,
+          })),
+          recentActivity: recentActivity.map((row) => ({
+            type: row.type,
+            title: row.title,
+            createdAt: row.createdAt,
+          })),
+        }),
+      };
+    },
+
+    draft_project_from_github: handleDraftProjectFromGithub,
+
+    create_project: async (args) => {
+      try {
+        const project = await createProject(
+          withOwnerDefault(args, user, "projects"),
+        );
+        await addCreatorAsOwner("PROJECT", project.id, user.id);
+        return { created: true, project: compactProject(project) };
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          return {
+            error: "Validation failed",
+            details: error.errors,
+            fallbackAction: newProjectFormFallback({ name: str(args.name) }),
+          };
+        }
+        throw error;
       }
-      if (error instanceof InsightsContextNotFoundError) {
-        return { error: "Project not found.", fallbackAction: BROWSE_PROJECTS_FALLBACK };
+    },
+
+    update_project: async (args) => {
+      const id = str(args.id);
+      if (!id)
+        return {
+          error:
+            "id is required — call list_projects or get_project first to find it.",
+          fallbackAction: BROWSE_PROJECTS_FALLBACK,
+        };
+      try {
+        const project = await updateProjectFields(id, args, edit.projects);
+        return { updated: true, project: compactProject(project) };
+      } catch (error) {
+        if (error instanceof ProjectNotFoundError)
+          return {
+            error: "Project not found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        if (error instanceof ValidationError) {
+          return {
+            error: "Validation failed",
+            details: error.errors,
+            fallbackAction: editProjectFormFallback(id),
+          };
+        }
+        throw error;
       }
-      if (error instanceof InsightsResponseError || error instanceof Error) {
-        return { error: "Couldn't generate insights right now.", fallbackAction: OPEN_INSIGHTS_FALLBACK };
+    },
+
+    delete_project: async (args) => {
+      const id = str(args.id);
+      if (!id)
+        return {
+          error: "id is required.",
+          fallbackAction: BROWSE_PROJECTS_FALLBACK,
+        };
+      const project = await getProjectById(id, remove.projects);
+      if (!project)
+        return {
+          error: "Project not found.",
+          fallbackAction: BROWSE_PROJECTS_FALLBACK,
+        };
+
+      if (args.confirm !== true) {
+        return {
+          requiresConfirmation: true,
+          project: { id: project.id, name: project.name },
+        };
       }
-      throw error;
-    }
-  },
 
-  list_owners: async () => {
-    const owners = await listOwners();
-    return { count: owners.length, owners };
-  },
+      await deleteProjectById(id, remove.projects);
+      return { deleted: true, id, name: project.name };
+    },
 
-  set_appearance: async (args) => {
-    const theme = str(args.theme) as ThemePreference;
-    if (theme !== "light" && theme !== "dark" && theme !== "system") {
-      return { error: "theme must be light, dark, or system.", fallbackAction: OPEN_SETTINGS_FALLBACK };
-    }
-    return {
-      applied: true,
-      theme,
-      clientAction: { type: "set_theme", theme },
-    };
-  },
+    list_ideas: async (args) => {
+      const owner = str(args.owner) || undefined;
+      const filters = {
+        q: str(args.q) || undefined,
+        status: str(args.status) || undefined,
+        tag: str(args.tag) || undefined,
+        technology: str(args.technology) || undefined,
+      };
+      let ideas = await listIdeas({ ...filters, owner }, view.ideas);
+      let note: string | undefined;
+      let hint: string | undefined;
+      if (owner && ideas.length === 0) {
+        const visible = await listIdeas(filters, view.ideas);
+        if (visible.length > 0) {
+          if (isSelf(owner, user)) {
+            ideas = visible;
+            note =
+              "No ideas list you as the owner by name, so this is every idea you can see.";
+          } else {
+            hint = `No idea has an owner matching "${owner}", but ${visible.length} match the other filters. Check list_owners for the saved name.`;
+          }
+        }
+      }
+      return {
+        count: ideas.length,
+        ideas: ideas.map(compactIdea),
+        ...(note ? { note } : {}),
+        ...(hint ? { hint } : {}),
+        related: { href: "/ideas", name: "Ideas" },
+      };
+    },
 
-  open_page: async (args) => {
-    const page = str(args.page) as keyof typeof OPEN_PAGES;
-    const target = OPEN_PAGES[page];
-    if (!target) {
-      return { error: `Unknown page. Use one of: ${Object.keys(OPEN_PAGES).join(", ")}.` };
-    }
-    return { opened: true, navAction: target };
-  },
-};
+    get_idea: async (args) => {
+      const idea = await resolveIdea(args, view.ideas);
+      if (!idea)
+        return {
+          error: "No matching idea found.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      return { idea: fullIdea(idea) };
+    },
 
-export const CHATBOT_TOOL_HANDLERS: Record<string, (args: Record<string, unknown>) => Promise<unknown>> = Object.fromEntries(
-  Object.entries(RAW_CHATBOT_TOOL_HANDLERS).map(([name, handler]) => [name, withFallback(handler)]),
-);
+    create_idea: async (args) => {
+      try {
+        const idea = await createIdea(withOwnerDefault(args, user, "ideas"));
+        return { created: true, idea: compactIdea(idea) };
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          return {
+            error: "Validation failed",
+            details: error.errors,
+            fallbackAction: newIdeaFormFallback({ name: str(args.name) }),
+          };
+        }
+        throw error;
+      }
+    },
+
+    update_idea: async (args) => {
+      const id = str(args.id);
+      if (!id)
+        return {
+          error:
+            "id is required — call list_ideas or get_idea first to find it.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      try {
+        const idea = await updateIdeaFields(id, args, edit.ideas);
+        return { updated: true, idea: compactIdea(idea) };
+      } catch (error) {
+        if (error instanceof IdeaNotFoundError)
+          return {
+            error: "Idea not found.",
+            fallbackAction: BROWSE_IDEAS_FALLBACK,
+          };
+        if (error instanceof ValidationError) {
+          return {
+            error: "Validation failed",
+            details: error.errors,
+            fallbackAction: editIdeaFormFallback(id),
+          };
+        }
+        throw error;
+      }
+    },
+
+    promote_idea: async (args) => {
+      const id = str(args.id);
+      if (!id)
+        return {
+          error: "id is required.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      const idea = await getIdeaById(id, edit.ideas);
+      if (!idea)
+        return {
+          error: "Idea not found.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      if (idea.status === "PROMOTED") {
+        return {
+          error: "This idea has already been promoted.",
+          idea: compactIdea(idea),
+          fallbackAction: idea.promotedProjectId
+            ? linkFallback(
+                `/projects/${idea.promotedProjectId}`,
+                "Open the project",
+              )
+            : BROWSE_IDEAS_FALLBACK,
+        };
+      }
+      if (args.confirm !== true) {
+        return {
+          requiresConfirmation: true,
+          action: "promote",
+          idea: { id: idea.id, name: idea.name },
+        };
+      }
+      try {
+        const result = await promoteIdeaToProject(id, edit.ideas);
+        return {
+          promoted: true,
+          idea: compactIdea(result.idea),
+          project: compactProject(result.project),
+        };
+      } catch (error) {
+        if (error instanceof ValidationError) {
+          return {
+            error: "Validation failed",
+            details: error.errors,
+            fallbackAction: BROWSE_IDEAS_FALLBACK,
+          };
+        }
+        throw error;
+      }
+    },
+
+    delete_idea: async (args) => {
+      const id = str(args.id);
+      if (!id)
+        return {
+          error: "id is required.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      const idea = await getIdeaById(id, remove.ideas);
+      if (!idea)
+        return {
+          error: "Idea not found.",
+          fallbackAction: BROWSE_IDEAS_FALLBACK,
+        };
+      if (args.confirm !== true) {
+        return {
+          requiresConfirmation: true,
+          action: "delete",
+          idea: { id: idea.id, name: idea.name },
+        };
+      }
+      await deleteIdeaById(id, remove.ideas);
+      return { deleted: true, id, name: idea.name };
+    },
+
+    list_documents: async (args) => {
+      let projectId = str(args.projectId) || undefined;
+      const projectName = str(args.projectName);
+      if (!projectId && projectName) {
+        const project = await resolveProject(
+          { name: projectName },
+          view.projects,
+        );
+        if (!project)
+          return {
+            error: "No matching project found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        projectId = project.id;
+      }
+      const q = str(args.q) || undefined;
+      const documents = await searchDocumentation(
+        {
+          q,
+          projectId,
+          category: str(args.category) || undefined,
+        },
+        view.documents,
+      );
+      return {
+        count: documents.length,
+        documents: documents.map((doc) => compactDocument(doc, q)),
+      };
+    },
+
+    get_document: async (args) => {
+      let projectId = str(args.projectId) || undefined;
+      const projectName = str(args.projectName);
+      if (!projectId && projectName) {
+        const project = await resolveProject(
+          { name: projectName },
+          view.projects,
+        );
+        if (!project)
+          return {
+            error: "No matching project found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        projectId = project.id;
+      }
+      const document = await resolveDocument(
+        { ...args, projectId },
+        view.documents,
+      );
+      if (!document)
+        return {
+          error: "No matching document found.",
+          fallbackAction: BROWSE_PROJECTS_FALLBACK,
+        };
+      return {
+        document: fullDocument(document),
+        related: {
+          href: `/projects/${document.projectId}`,
+          name: document.projectName,
+        },
+      };
+    },
+
+    list_activity: async (args) => {
+      let projectId = str(args.projectId) || undefined;
+      const projectName = str(args.projectName);
+      if (!projectId && projectName) {
+        const project = await resolveProject(
+          { name: projectName },
+          view.projects,
+        );
+        if (!project)
+          return {
+            error: "No matching project found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        projectId = project.id;
+      }
+      const activities = await searchProjectActivities(
+        {
+          q: str(args.q) || undefined,
+          projectId,
+        },
+        30,
+        view.projects,
+      );
+      return { count: activities.length, activities };
+    },
+
+    get_dashboard: async () => {
+      const [projects, ideaRows, insightSnap] = await Promise.all([
+        allowed("projects", "view") ? listProjects({}, view.projects) : [],
+        allowed("ideas", "view") ? listIdeas({}, view.ideas) : [],
+        insightsAll ? getInsightSnapshot(CATALOG_INSIGHT_SCOPE) : null,
+      ]);
+      const insights = insightSnap ? insightsPulse(insightSnap) : null;
+      return {
+        dashboard: {
+          projects: allowed("projects", "view")
+            ? portfolioSnapshot(projects)
+            : null,
+          ideas: allowed("ideas", "view") ? ideasSnapshot(ideaRows) : null,
+          insights: insights ? { saved: insights.total, ...insights } : null,
+        },
+        related: { href: "/", name: "Dashboard" },
+      };
+    },
+
+    list_insights: async (args) => {
+      let projectId = str(args.projectId) || undefined;
+      const projectName = str(args.projectName);
+      if (!projectId && projectName) {
+        const project = await resolveProject(
+          { name: projectName },
+          view.projects,
+        );
+        if (!project)
+          return {
+            error: "No matching project found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        projectId = project.id;
+      }
+      const q = str(args.q) || undefined;
+      const type = str(args.type) || undefined;
+      const scope = projectId
+        ? insightScope(projectId)
+        : q
+          ? undefined
+          : CATALOG_INSIGHT_SCOPE;
+      const insights = await listInsights({ q, scope, type });
+      const generation = scope
+        ? (await getInsightSnapshot(scope)).generation
+        : null;
+      return {
+        count: insights.length,
+        generation,
+        insights: insights.map(compactInsight),
+        related: {
+          href: projectId ? `/projects/${projectId}` : "/insights",
+          name: "Insights",
+        },
+      };
+    },
+
+    get_insight: async (args) => {
+      const insight = await resolveInsight(args);
+      if (!insight)
+        return {
+          error: "No matching insight found.",
+          fallbackAction: OPEN_INSIGHTS_FALLBACK,
+        };
+      return { insight };
+    },
+
+    save_insight_as_idea: async (args) => {
+      const insight = await resolveInsight(args);
+      if (!insight)
+        return {
+          error: "No matching insight found.",
+          fallbackAction: OPEN_INSIGHTS_FALLBACK,
+        };
+      try {
+        const saved = await saveInsightAsIdea(insight.id);
+        return {
+          savedAsIdea: true,
+          insight: compactInsight(saved),
+          related: { href: "/ideas", name: "Ideas" },
+        };
+      } catch (error) {
+        if (error instanceof InsightNotFoundError)
+          return {
+            error: "Insight not found.",
+            fallbackAction: OPEN_INSIGHTS_FALLBACK,
+          };
+        throw error;
+      }
+    },
+
+    generate_insights: async (args) => {
+      let projectId = str(args.projectId) || undefined;
+      const projectName = str(args.projectName);
+      if (!projectId && projectName) {
+        const project = await resolveProject(
+          { name: projectName },
+          view.projects,
+        );
+        if (!project)
+          return {
+            error: "No matching project found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        projectId = project.id;
+      }
+      try {
+        const snapshot = await generateAndPersistInsights(projectId);
+        return {
+          generated: true,
+          added: snapshot.generation?.addedCount ?? 0,
+          updated: snapshot.generation?.updatedCount ?? 0,
+          unchanged: snapshot.generation?.unchangedCount ?? 0,
+          insights: snapshot.insights.map(compactInsight),
+          related: {
+            href: projectId ? `/projects/${projectId}` : "/insights",
+            name: "Insights",
+          },
+        };
+      } catch (error) {
+        if (error instanceof InsightsNotConfiguredError) {
+          return {
+            error:
+              "AI is not configured, so I can't generate insights right now.",
+            fallbackAction: OPEN_INSIGHTS_FALLBACK,
+          };
+        }
+        if (error instanceof InsightsContextNotFoundError) {
+          return {
+            error: "Project not found.",
+            fallbackAction: BROWSE_PROJECTS_FALLBACK,
+          };
+        }
+        if (error instanceof InsightsResponseError || error instanceof Error) {
+          return {
+            error: "Couldn't generate insights right now.",
+            fallbackAction: OPEN_INSIGHTS_FALLBACK,
+          };
+        }
+        throw error;
+      }
+    },
+
+    list_owners: async (args) => {
+      const owners = await listOwners();
+      const query = str(args.q);
+      const matched = query
+        ? owners.filter((owner) => ownerNameMatches(owner.name, query))
+        : owners;
+      return { count: matched.length, owners: matched };
+    },
+
+    set_appearance: async (args) => {
+      const theme = str(args.theme) as ThemePreference;
+      if (theme !== "light" && theme !== "dark" && theme !== "system") {
+        return {
+          error: "theme must be light, dark, or system.",
+          fallbackAction: OPEN_SETTINGS_FALLBACK,
+        };
+      }
+      return {
+        applied: true,
+        theme,
+        clientAction: { type: "set_theme", theme },
+      };
+    },
+
+    open_page: async (args) => {
+      const page = str(args.page) as keyof typeof OPEN_PAGES;
+      const target = OPEN_PAGES[page];
+      if (!target) {
+        return {
+          error: `Unknown page. Use one of: ${Object.keys(OPEN_PAGES).join(", ")}.`,
+        };
+      }
+      return { opened: true, navAction: target };
+    },
+
+    ...teamHandlers,
+    ...adminHandlers,
+  };
+}
+
+/** Tool handlers for one signed-in user. Each is re-checked against the user's permissions at call time. */
+export function createChatbotToolHandlers(ctx: ChatbotContext): ToolHandlerMap {
+  const raw = buildRawHandlers(ctx);
+  return Object.fromEntries(
+    Object.entries(raw).map(([name, handler]) => {
+      const guarded: ToolHandlerMap[string] = async (args) =>
+        toolAvailable(name, ctx.user.permissions)
+          ? handler(args)
+          : {
+              error: `Not allowed for this person's role: it needs ${describeRequirement(name)}.`,
+              note: "Explain in your own words what is missing and what they CAN do instead. No stock phrases, no retrying.",
+            };
+      return [name, withFallback(guarded)];
+    }),
+  );
+}
+
+/** Tool definitions limited to what the user may use, so the model never offers forbidden actions. */
+export function chatbotToolsFor(ctx: ChatbotContext) {
+  return toolsFor(ctx.user.permissions, CHATBOT_TOOLS);
+}

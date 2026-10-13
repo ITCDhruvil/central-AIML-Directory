@@ -1,3 +1,4 @@
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectById } from "@/lib/projects";
 import { listDocumentation } from "@/lib/documents";
@@ -19,9 +20,12 @@ const STATUS_BY_CODE: Record<GitHubApiError["code"], number> = {
  * stored. Read-only — never writes to the database.
  */
 export async function POST(_request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("projects", "edit");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, auth.access);
   if (!project) {
     return NextResponse.json({ error: "Project not found" }, { status: 404 });
   }

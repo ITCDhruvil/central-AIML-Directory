@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Pencil, Trash2 } from "lucide-react";
+import { useCan } from "@/components/AuthProvider";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FLUID_TAB_ITEM } from "@/components/ui/FluidTabs";
 import { cn } from "@/lib/cn";
@@ -70,6 +71,8 @@ function ActionItem({
 
 export function ProjectActions({ id, name, deploymentUrl }: { id: string; name: string; deploymentUrl?: string | null }) {
   const router = useRouter();
+  const canEdit = useCan("projects", "edit");
+  const canDelete = useCan("projects", "delete");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +110,10 @@ export function ProjectActions({ id, name, deploymentUrl }: { id: string; name: 
           title={isInternalDeploymentUrl(deploymentUrl) ? `Internal server — ${INTERNAL_ACCESS_HINT}` : undefined}
         />
       )}
-      <ActionItem href={`/projects/${id}/edit`} icon={<Pencil size={18} />} label="Edit" />
-      <ActionItem icon={<Trash2 size={18} />} label="Delete" tone="danger" onClick={() => setConfirmOpen(true)} />
+      {canEdit && <ActionItem href={`/projects/${id}/edit`} icon={<Pencil size={18} />} label="Edit" />}
+      {canDelete && (
+        <ActionItem icon={<Trash2 size={18} />} label="Delete" tone="danger" onClick={() => setConfirmOpen(true)} />
+      )}
       {error ? (
         <p role="alert" className="sr-only">
           {error}

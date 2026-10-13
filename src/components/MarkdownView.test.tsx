@@ -17,6 +17,17 @@ test("MarkdownView renders script/HTML-looking Markdown as inert text, never as 
   assert.ok(html.includes("Title"), "headings still render");
 });
 
+test("MarkdownView renders a markdown table and image", () => {
+  const content = ["| Name | Count |", "| --- | --- |", "| Alpha | 2 |", "", "![Diagram](https://example.com/diagram.png)"].join("\n");
+  const html = renderToStaticMarkup(<MarkdownView content={content} />);
+
+  assert.ok(html.includes("<table"), "a markdown table becomes a table");
+  assert.ok(html.includes("Alpha"), "table cell text is kept");
+  assert.ok(html.includes("<img"), "a markdown image becomes an image");
+  assert.ok(html.includes("https://example.com/diagram.png"), "the image address is kept");
+  assert.ok(html.includes('alt="Diagram"'), "the image description is kept");
+});
+
 test("MarkdownView does not execute Markdown link/image injection tricks as raw HTML", () => {
   const content = '[click me](javascript:alert(1)) and <a href="javascript:alert(1)">link</a>';
   const html = renderToStaticMarkup(<MarkdownView content={content} />);

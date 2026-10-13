@@ -1,6 +1,7 @@
 import "server-only";
 import { AIProviderError, type AIConfig } from "@/lib/ai/types";
 import type { ChatCompletionMessage, ToolDefinition } from "@/lib/ai/chatTypes";
+import { recordModelCall } from "@/lib/ai/usageContext";
 
 const OPENAI_CHAT_COMPLETIONS_URL = "https://api.openai.com/v1/chat/completions";
 
@@ -38,7 +39,11 @@ export async function callAssistantModel(systemPrompt: string, userMessage: stri
     throw new AIProviderError(`AI provider request failed with status ${response.status}`);
   }
 
-  const data = (await response.json()) as { choices?: Array<{ message?: { content?: unknown } }> };
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: unknown } }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
+  };
+  recordModelCall(data.usage, config.model);
   const content = data.choices?.[0]?.message?.content;
   if (typeof content !== "string") {
     throw new AIProviderError("AI provider returned an unexpected response shape");
@@ -84,7 +89,9 @@ export async function callAssistantModelWithTools(
 
   const data = (await response.json()) as {
     choices?: Array<{ message?: ChatCompletionMessage }>;
+    usage?: { prompt_tokens?: unknown; completion_tokens?: unknown };
   };
+  recordModelCall(data.usage, config.model);
   const message = data.choices?.[0]?.message;
   if (!message || (message.content === undefined && !message.tool_calls)) {
     throw new AIProviderError("AI provider returned an unexpected response shape");

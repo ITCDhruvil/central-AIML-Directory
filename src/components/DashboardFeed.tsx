@@ -81,9 +81,12 @@ function FeedRow({
   );
 }
 
-export function DashboardFeed({ ideas, insights }: { ideas: Idea[]; insights: Insight[] }) {
+/** A null list means the signed-in user has no access to that area, so its panel is left out. */
+export function DashboardFeed({ ideas, insights }: { ideas: Idea[] | null; insights: Insight[] | null }) {
+  if (!ideas && !insights) return null;
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className={`grid grid-cols-1 gap-4 ${ideas && insights ? "lg:grid-cols-2" : "lg:grid-cols-1"}`}>
+      {ideas && (
       <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <FeedHeader title="Recent ideas" href="/ideas" />
         {ideas.length === 0 ? (
@@ -104,7 +107,9 @@ export function DashboardFeed({ ideas, insights }: { ideas: Idea[]; insights: In
           </ol>
         )}
       </section>
+      )}
 
+      {insights && (
       <section className="rounded-lg border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
         <FeedHeader title="Recent insights" href="/insights" />
         {insights.length === 0 ? (
@@ -125,6 +130,7 @@ export function DashboardFeed({ ideas, insights }: { ideas: Idea[]; insights: In
           </ol>
         )}
       </section>
+      )}
     </div>
   );
 }

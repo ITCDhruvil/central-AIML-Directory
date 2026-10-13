@@ -4,6 +4,15 @@
    not the OS preference directly — lets Settings offer an explicit Light/Dark/System choice. */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Dark mode surfaces: near-black rather than grey. The page (zinc-950), cards, panels and the sidebar (zinc-900) and the
+   borders and hover fills built on zinc-800 are all pulled well below Tailwind's defaults, keeping just enough
+   difference between them to read as layers. */
+.dark {
+  --color-zinc-950: #050506;
+  --color-zinc-900: #0d0d0f;
+  --color-zinc-800: #1a1a1d;
+}
+
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
@@ -21,99 +30,125 @@ body {
   }
 }
 
-/* Sidebar assistant trigger — converted from the provided styled-components button. */
+/* Sidebar assistant launcher ("Ask TENALI"). Animated light beams drift behind the logo and label (the beams are
+   <BackgroundBeams /> inside the button). Light mode: a warm off-white button, orange beams, dark logo and text. Dark mode:
+   the app's near-black, brighter orange beams, white logo and text. The collapsed sidebar shows the same thing as a circle
+   with just the logo. */
 .assistant-launch {
+  position: relative;
+  z-index: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
-  padding: 12px 20px;
+  height: 3rem;
+  padding: 0 1rem;
   border: 0;
-  position: relative;
+  border-radius: 0.5rem;
   overflow: hidden;
-  border-radius: 10rem;
-  transition: all 0.02s;
-  font-size: 13px;
+  --beam-1: #f97316;
+  --beam-2: #ea580c;
+  --beam-3: #fdba74;
+  background: #fff7ed;
+  color: #18181b;
+  font-size: 13.5px;
   font-weight: 700;
+  letter-spacing: 0.01em;
   cursor: pointer;
-  color: #9a3412;
-  background: #fff;
-  z-index: 0;
-  box-shadow: 0 0px 7px -5px rgba(0, 0, 0, 0.5);
+  box-shadow:
+    0 6px 16px -8px rgba(234, 88, 12, 0.45),
+    inset 0 0 0 1px rgba(234, 88, 12, 0.28);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.2s ease;
+}
+
+/* The glass layer: softens the beams behind it so the logo and text stay crisp on top. Sits above the beams (z 0) and
+   below the label (z 2). */
+.assistant-launch > .assistant-launch-frost {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: rgba(255, 247, 237, 0.38);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+.dark .assistant-launch > .assistant-launch-frost {
+  background: rgba(10, 10, 10, 0.34);
+}
+
+.assistant-launch > .assistant-launch-label {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
 }
 
 .assistant-launch:hover {
-  background: #fff7ed;
-  color: #9a3412;
+  box-shadow:
+    0 8px 20px -8px rgba(234, 88, 12, 0.55),
+    inset 0 0 0 1px rgba(234, 88, 12, 0.7);
+}
+
+/* Dark mode: the same near-black as the rest of the dark theme, with brighter beams. */
+.dark .assistant-launch {
+  --beam-1: #fb923c;
+  --beam-2: #f97316;
+  --beam-3: #fed7aa;
+  background: #0a0a0a;
+  color: #fff;
+  box-shadow:
+    0 6px 16px -6px rgba(0, 0, 0, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.dark .assistant-launch > .assistant-launch-label img {
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+}
+
+.dark .assistant-launch:hover {
+  box-shadow:
+    0 8px 20px -6px rgba(0, 0, 0, 0.65),
+    inset 0 0 0 1px rgba(251, 146, 60, 0.6);
 }
 
 .assistant-launch:active {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
-.assistant-launch-icon {
-  width: 2.25rem;
-  height: 2.25rem;
+.assistant-launch:focus-visible {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
+/* The larger, non-clickable version of the mark on the chat's opening screen. */
+.assistant-launch.assistant-avatar {
+  width: 3.5rem;
+  height: 3.5rem;
   padding: 0;
+  border-radius: 1rem;
+  cursor: default;
 }
 
-.assistant-launch-open {
-  background: #ffedd5;
-  color: #9a3412;
+.assistant-launch.assistant-avatar:hover,
+.assistant-launch.assistant-avatar:active {
+  transform: none;
 }
 
-.assistant-launch .hoverEffect {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.assistant-launch .hoverEffect span {
-  background: linear-gradient(
-    90deg,
-    #fdba74 0%,
-    #ea580c 42%,
-    #f97316 68%,
-    #ffedd5 100%
-  );
-  border-radius: 40rem;
-  width: 10rem;
-  height: 10rem;
-  transition: 0.4s;
-  filter: blur(20px);
-  animation: assistant-launch-spin 3s linear infinite;
-  opacity: 0.7;
-}
-
-.assistant-launch:hover .hoverEffect span,
-.assistant-launch-open .hoverEffect span {
-  width: 8rem;
-  height: 8rem;
-}
-
-.dark .assistant-launch {
-  background: rgb(39, 39, 42);
-  color: #fdba74;
-  box-shadow: 0 0px 7px -5px rgba(0, 0, 0, 0.8);
-}
-
-.dark .assistant-launch:hover,
+.assistant-launch-open,
 .dark .assistant-launch-open {
-  background: rgb(67, 20, 7);
-  color: #ffedd5;
+  box-shadow: 0 0 0 3px rgba(251, 146, 60, 0.4);
 }
 
-@keyframes assistant-launch-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Collapsed sidebar: just the circle, no label. */
+.assistant-launch-icon {
+  width: 3rem;
+  height: 3rem;
+  padding: 0;
+  border-radius: 9999px;
 }
 
 @keyframes chat-marquee {
@@ -136,8 +171,251 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-launch .hoverEffect span,
   .chat-title-marquee {
     animation: none;
+  }
+}
+
+/* Themed scrollbars: slim, rounded, neutral at rest and orange on hover (matches the app accent).
+   WebKit/Blink get the pseudo-element version so the hover colour works; Firefox gets the standard properties. */
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: #d4d4d8;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+  transition: background-color 0.15s;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #fb923c;
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: #ea580c;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: #3f3f46;
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: #f97316;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #d4d4d8 transparent;
+  }
+
+  .dark * {
+    scrollbar-color: #3f3f46 transparent;
+  }
+}
+
+/* Shared on/off switch (src/components/ui/Switch.tsx).
+   Sizes are whole pixels with an equal inset on every side, so the knob is exactly centred in the track:
+   .switch is 36x20 (16px knob, 2px inset); .switch-md is 44x24 (20px knob). Change --color-on to re-colour every toggle. */
+.switch {
+  --w: 36px;
+  --h: 20px;
+  --d: 16px;
+  --off: 2px;
+  --wider: 20px;
+  --color-off: #d4d4d8;
+  --color-on: #ea580c;
+
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  width: var(--w);
+  height: var(--h);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.switch-md {
+  --w: 44px;
+  --h: 24px;
+  --d: 20px;
+  --wider: 24px;
+}
+
+.dark .switch {
+  --color-off: #52525b;
+}
+
+.slider {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background-color: var(--color-off);
+  transition: background-color 0.25s ease;
+}
+
+/* The knob is centred with top/bottom insets (not a magic number), and its outline is symmetric. */
+.slider::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: var(--off);
+  width: var(--d);
+  height: var(--d);
+  margin-top: calc(var(--d) / -2);
+  border-radius: 9999px;
+  background-color: #fff;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 0 4px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+    width 0.2s ease;
+}
+
+.switch:hover .slider {
+  filter: brightness(0.96);
+}
+
+.switch input[type="checkbox"]:checked + .slider {
+  background-color: var(--color-on);
+}
+
+.switch input[type="checkbox"]:checked + .slider::after {
+  transform: translateX(calc(var(--w) - var(--d) - var(--off) * 2));
+}
+
+/* The knob stretches slightly while pressed, like a native switch. */
+.switch input[type="checkbox"]:active + .slider::after {
+  width: var(--wider);
+}
+
+.switch input[type="checkbox"]:checked:active + .slider::after {
+  transform: translateX(calc(var(--w) - var(--wider) - var(--off) * 2));
+}
+
+/* Visually hidden but still focusable, so keyboard and screen-reader users can operate it. */
+.switch input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  margin: 0;
+}
+
+.switch input[type="checkbox"]:focus-visible + .slider {
+  outline: 2px solid #f97316;
+  outline-offset: 2px;
+}
+
+.switch input[type="checkbox"]:disabled + .slider {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Browser autofill paints inputs light blue, which looks broken inside fields that also hold icons or a domain suffix
+   (only the text area turns blue). Painting the field's own colour over it keeps the whole field one surface. */
+input.autofill-clean:-webkit-autofill,
+input.autofill-clean:-webkit-autofill:hover,
+input.autofill-clean:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset;
+  -webkit-text-fill-color: #18181b;
+  caret-color: #18181b;
+  transition: background-color 9999s ease-out 0s;
+}
+
+.dark input.autofill-clean:-webkit-autofill,
+.dark input.autofill-clean:-webkit-autofill:hover,
+.dark input.autofill-clean:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #050506 inset;
+  -webkit-text-fill-color: #fafafa;
+  caret-color: #fafafa;
+}
+
+/* Modal enter/exit: backdrop fades, dialog fades and rises slightly. */
+@keyframes modal-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes modal-pop-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: none; } }
+@keyframes modal-pop-out { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(6px) scale(0.98); } }
+.modal-backdrop { animation: modal-fade-in 180ms ease-out both; }
+.modal-panel { animation: modal-pop-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+[data-closing="true"] .modal-backdrop { animation: modal-fade-out 150ms ease-in both; }
+[data-closing="true"] .modal-panel { animation: modal-pop-out 150ms ease-in both; }
+@media (prefers-reduced-motion: reduce) {
+  .modal-backdrop, .modal-panel, [data-closing="true"] .modal-backdrop, [data-closing="true"] .modal-panel { animation: none; }
+}
+
+/* Swapping content inside a card (login <-> forgot password). */
+@keyframes view-fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+.view-fade { animation: view-fade-in 240ms ease-out both; }
+@media (prefers-reduced-motion: reduce) { .view-fade { animation: none; } }
+
+/* A row that scrolls sideways with no visible scrollbar (e.g. the settings tabs). Beats the themed scrollbars above. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar,
+.dark .no-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Short screens: drop the extras on the chat's opening screen so the starter chips fit without a scrollbar. */
+@media (max-height: 600px) {
+  .chat-welcome-extra {
+    display: none;
+  }
+}
+
+/* Shimmering text for waiting states: a lighter band sweeps across muted text. The band is the same gradient clipped to
+   the glyphs, so it needs no extra elements. Plain muted text when motion is reduced. */
+.text-shimmer {
+  --shimmer-base: #a1a1aa;
+  --shimmer-peak: #18181b;
+  display: inline-block;
+  color: var(--shimmer-base);
+  background-image: linear-gradient(
+    100deg,
+    var(--shimmer-base) 0%,
+    var(--shimmer-base) 40%,
+    var(--shimmer-peak) 50%,
+    var(--shimmer-base) 60%,
+    var(--shimmer-base) 100%
+  );
+  background-size: 250% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: text-shimmer 2s linear infinite;
+}
+
+.dark .text-shimmer {
+  --shimmer-base: #71717a;
+  --shimmer-peak: #fafafa;
+}
+
+@keyframes text-shimmer {
+  from { background-position: 150% 0; }
+  to { background-position: -50% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .text-shimmer {
+    animation: none;
+    background-image: none;
+    -webkit-text-fill-color: currentColor;
   }
 }

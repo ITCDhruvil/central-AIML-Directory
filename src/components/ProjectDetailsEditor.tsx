@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentType } from "react";
+import { useCan } from "@/components/AuthProvider";
 import { useRouter } from "next/navigation";
 import { CalendarPlus, History, Milestone, User } from "lucide-react";
 import { Dropdown, type DropdownOption } from "@/components/ui/Dropdown";
@@ -94,6 +95,11 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
   const router = useRouter();
   const [local, setLocal] = useState(project);
   const [editing, setEditing] = useState<null | "type" | "status" | "stage" | "owner">(null);
+  const canEdit = useCan("projects", "edit");
+  // Read-only users see the values but clicking does nothing.
+  const requestEdit = (field: "type" | "status" | "stage" | "owner") => {
+    if (canEdit) setEditing(field);
+  };
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -138,7 +144,7 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
             onDismiss={() => setEditing(null)}
           />
         ) : (
-          <ValueButton label="Project Type" onClick={() => setEditing("type")}>
+          <ValueButton label="Project Type" onClick={() => requestEdit("type")}>
             {local.type}
           </ValueButton>
         )}
@@ -164,7 +170,7 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
             onDismiss={() => setEditing(null)}
           />
         ) : (
-          <ValueButton label="Status" onClick={() => setEditing("status")}>
+          <ValueButton label="Status" onClick={() => requestEdit("status")}>
             <ProjectStatusBadge status={local.status} />
           </ValueButton>
         )}
@@ -191,7 +197,7 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
             onDismiss={() => setEditing(null)}
           />
         ) : (
-          <ValueButton label="Stage" muted={!local.stage} onClick={() => setEditing("stage")}>
+          <ValueButton label="Stage" muted={!local.stage} onClick={() => requestEdit("stage")}>
             {local.stage ?? "Not set"}
           </ValueButton>
         )}
@@ -216,7 +222,7 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
             onDismiss={() => setEditing(null)}
           />
         ) : (
-          <ValueButton label="Owner" muted={!local.owner} onClick={() => setEditing("owner")}>
+          <ValueButton label="Owner" muted={!local.owner} onClick={() => requestEdit("owner")}>
             {local.owner ?? "Not set"}
           </ValueButton>
         )}

@@ -3,12 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Check, Pencil, X } from "lucide-react";
+import { useCan } from "@/components/AuthProvider";
 import { cn } from "@/lib/cn";
 import type { Project, ProjectInput } from "@/types/project";
 
 /** Click the project name to rename it in place — no trip to the Edit page, matching Jira's inline title edit. */
 export function InlineEditableTitle({ project, className }: { project: Project; className?: string }) {
   const router = useRouter();
+  const canEdit = useCan("projects", "edit");
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(project.name);
   const [saving, setSaving] = useState(false);
@@ -130,6 +132,10 @@ export function InlineEditableTitle({ project, className }: { project: Project; 
         {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       </div>
     );
+  }
+
+  if (!canEdit) {
+    return <h1 className={cn("font-semibold text-zinc-900 dark:text-zinc-100", className ?? "text-xl")}>{project.name}</h1>;
   }
 
   return (

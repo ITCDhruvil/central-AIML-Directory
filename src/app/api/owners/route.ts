@@ -1,7 +1,11 @@
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { createOwner, listOwners } from "@/lib/owners";
 
 export async function GET() {
+  const auth = await apiAuthorize("owners", "view");
+  if (!auth.ok) return auth.response;
+
   try {
     const owners = await listOwners();
     return NextResponse.json({ owners });
@@ -12,6 +16,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const auth = await apiAuthorize("owners", "create");
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();

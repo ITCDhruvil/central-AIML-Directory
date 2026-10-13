@@ -1,3 +1,4 @@
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { GitHubApiError, importGitHubRepository } from "@/lib/github/client";
 import { parseGitHubRepoUrl } from "@/lib/github/parseUrl";
@@ -17,6 +18,9 @@ const STATUS_BY_CODE: Record<GitHubApiError["code"], number> = {
 };
 
 export async function POST(request: NextRequest) {
+  const auth = await apiAuthorize("projects", "create");
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();

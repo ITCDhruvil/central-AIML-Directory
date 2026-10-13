@@ -1,3 +1,5 @@
+import { audit } from "@/lib/audit";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { toDocumentation } from "@/lib/documentMapper";
@@ -9,10 +11,13 @@ import { ValidationError, validateManualDocumentInput } from "@/lib/validation";
 type RouteParams = { params: Promise<{ id: string; documentId: string }> };
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("documents", "view");
+  if (!auth.ok) return auth.response;
+
   const { id, documentId } = await params;
 
   try {
-    const document = await getDocumentationById(id, documentId);
+    const document = await getDocumentationById(id, documentId, auth.access);
     if (!document) {
       return NextResponse.json({ error: "Document not found" }, { status: 404 });
     }
@@ -25,12 +30,15 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 /** Edits a manually-created document. GitHub-sourced and generated documents are never editable here. */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("documents", "edit");
+  if (!auth.ok) return auth.response;
+
   const { id, documentId } = await params;
 
   // Scoped to (projectId, documentId) together — a document from another
   // project can never be reached through this route, regardless of what the
   // client sends.
-  const existing = await getDocumentationById(id, documentId);
+  const existing = await getDocumentationById(id, documentId, auth.access);
   if (!existing) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
@@ -55,6 +63,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       await recordProjectActivity(tx, id, "DOCUMENTATION_UPDATED", `Updated documentation “${updated.title}”`);
       return updated;
     });
+    await audit({ action: "document.updated", actorId: auth.user.id, entityType: "document", entityId: documentId, meta: { title: row.title, projectId: id }, request });
     return NextResponse.json({ document: toDocumentation(row) });
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -66,10 +75,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 }
 
 /** Deletes a manually-created document. GitHub-sourced and generated documents cannot be deleted here. */
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("documents", "delete");
+  if (!auth.ok) return auth.response;
+
   const { id, documentId } = await params;
 
-  const existing = await getDocumentationById(id, documentId);
+  const existing = await getDocumentationById(id, documentId, auth.access);
   if (!existing) {
     return NextResponse.json({ error: "Document not found" }, { status: 404 });
   }
@@ -79,6 +91,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
 
   try {
     await prisma.documentation.delete({ where: { id: documentId } });
+    await audit({ action: "document.deleted", actorId: auth.user.id, entityType: "document", entityId: documentId, meta: { title: existing.title, projectId: id }, request });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     console.error("DELETE /api/projects/[id]/documents/[documentId] failed", error);

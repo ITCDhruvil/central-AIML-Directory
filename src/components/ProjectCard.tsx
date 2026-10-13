@@ -26,7 +26,15 @@ export function ProjectCard({ project }: { project: Project }) {
       tone={toneFromId(project.id)}
       badge={TYPE_LABEL[project.type]}
       extraBadge={hasInternalDeployment(project.deploymentUrls) ? <InternalDeployBadge /> : undefined}
-      visual={<ProjectTypeIcon technologies={project.technologies} size={48} chrome="glyph" />}
+      visual={
+        <ProjectTypeIcon
+          name={project.name}
+          description={project.description}
+          technologies={project.technologies}
+          size={48}
+          chrome="glyph"
+        />
+      }
       title={project.name}
       description={project.description ? stripMarkdown(project.description) : null}
       stats={[

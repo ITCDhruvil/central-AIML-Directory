@@ -1,3 +1,5 @@
+import { guardedAi } from "@/lib/ai/guard";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModel } from "@/lib/ai/client";
@@ -19,7 +21,10 @@ const MAX_INPUT_LENGTH = 8000;
  * click per call, never touches any project record itself. The caller
  * (e.g. RichTextEditor's AI menu) applies the result to its own field.
  */
-export async function POST(request: NextRequest) {
+async function handlePost(request: NextRequest) {
+  const auth = await apiAuthorize("ai_text_transform", "use");
+  if (!auth.ok) return auth.response;
+
   let body: unknown;
   try {
     body = await request.json();
@@ -95,3 +100,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to transform text" }, { status: 500 });
   }
 }
+
+// Master switch, per-feature switch, quota and usage log (see lib/ai/guard.ts).
+export const POST = guardedAi("ai_text_transform", handlePost);

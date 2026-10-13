@@ -27,14 +27,29 @@ export function ChatBubbleActions({
     <div
       className={cn(
         "mt-1 flex items-center gap-0.5",
-        role === "user" ? "justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100" : "justify-start",
+        role === "user"
+          ? "justify-end opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+          : "justify-start",
       )}
     >
-      <button type="button" title={copied ? "Copied" : "Copy"} aria-label={copied ? "Copied" : "Copy"} onClick={onCopy} className={ACTION}>
+      <button
+        type="button"
+        title={copied ? "Copied" : "Copy"}
+        aria-label={copied ? "Copied" : "Copy"}
+        onClick={onCopy}
+        className={ACTION}
+      >
         {copied ? <Check size={14} /> : <Copy size={14} />}
       </button>
       {role === "user" && onRegenerate && (
-        <button type="button" title="Regenerate" aria-label="Regenerate" onClick={onRegenerate} disabled={disabled} className={ACTION}>
+        <button
+          type="button"
+          title="Regenerate"
+          aria-label="Regenerate"
+          onClick={onRegenerate}
+          disabled={disabled}
+          className={ACTION}
+        >
           <RefreshCw size={14} />
         </button>
       )}
@@ -46,9 +61,16 @@ export function ChatBubbleActions({
             aria-label="Good response"
             aria-pressed={feedback === "up"}
             onClick={() => onFeedback("up")}
-            className={cn(ACTION, feedback === "up" && "bg-green-50 text-green-600 dark:bg-green-500/15 dark:text-green-400")}
+            className={cn(
+              ACTION,
+              feedback === "up" &&
+                "bg-green-50 text-green-600 hover:bg-green-100 hover:text-green-600 dark:bg-green-500/15 dark:text-green-400 dark:hover:bg-green-500/25 dark:hover:text-green-400",
+            )}
           >
-            <ThumbsUp size={14} fill={feedback === "up" ? "currentColor" : "none"} />
+            <ThumbsUp
+              size={14}
+              fill={feedback === "up" ? "currentColor" : "none"}
+            />
           </button>
           <button
             type="button"
@@ -56,9 +78,16 @@ export function ChatBubbleActions({
             aria-label="Bad response"
             aria-pressed={feedback === "down"}
             onClick={() => onFeedback("down")}
-            className={cn(ACTION, feedback === "down" && "bg-green-50 text-green-600 dark:bg-green-500/15 dark:text-green-400")}
+            className={cn(
+              ACTION,
+              feedback === "down" &&
+                "bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-600 dark:bg-red-500/15 dark:text-red-400 dark:hover:bg-red-500/25 dark:hover:text-red-400",
+            )}
           >
-            <ThumbsDown size={14} fill={feedback === "down" ? "currentColor" : "none"} />
+            <ThumbsDown
+              size={14}
+              fill={feedback === "down" ? "currentColor" : "none"}
+            />
           </button>
         </>
       )}

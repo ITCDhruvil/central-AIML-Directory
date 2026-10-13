@@ -1,4 +1,5 @@
 import type { ChatCompletionMessage } from "@/lib/ai/chatTypes";
+import { redactMessagesForModel, type ChatCredentials } from "@/lib/ai/chatbotRedact";
 
 export const CHAT_HISTORY_KEY = "chatbot-conversations";
 export const MAX_CONVERSATIONS = 50;
@@ -9,7 +10,11 @@ export interface ChatBubble {
   related?: { href: string; label: string } | null;
   fallbackAction?: { href: string; label: string } | null;
   confirmation?: { yesText: string; noText: string } | null;
+  /** One-click next steps the assistant suggested; shown under the latest reply. */
+  followUps?: string[];
   feedback?: "up" | "down";
+  /** In-memory only: stripped before saving, see saveConversations. */
+  credentials?: ChatCredentials | null;
 }
 
 export interface ChatConversation {
@@ -87,9 +92,22 @@ export function loadConversations(): ChatConversation[] {
   return parseConversations(window.localStorage.getItem(CHAT_HISTORY_KEY));
 }
 
+/** Generated passwords must not outlive the session: drop them from bubbles and from saved tool results. */
+export function stripSecrets(items: ChatConversation[]): ChatConversation[] {
+  return items.map((item) => ({
+    ...item,
+    messages: redactMessagesForModel(item.messages),
+    bubbles: item.bubbles.map((bubble) => {
+      const copy = { ...bubble };
+      delete copy.credentials;
+      return copy;
+    }),
+  }));
+}
+
 export function saveConversations(items: ChatConversation[]): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(items));
+  window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(stripSecrets(items)));
 }
 
 export function upsertConversation(items: ChatConversation[], next: ChatConversation): ChatConversation[] {

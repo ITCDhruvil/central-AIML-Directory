@@ -315,7 +315,15 @@ export function validateAssistantQuestion(body: unknown): string {
 }
 
 export const MAX_CHAT_MESSAGES = 40;
+// What a person types. Replies and tool results are far longer (a table of ten projects, a full list_* result) and the
+// browser sends them back as history on the next turn, so they get their own, larger limits.
 export const MAX_CHAT_MESSAGE_LENGTH = 4000;
+export const MAX_CHAT_ASSISTANT_LENGTH = 20_000;
+export const MAX_CHAT_TOOL_LENGTH = 60_000;
+
+function chatContentLimit(role: string): number {
+  return role === "tool" ? MAX_CHAT_TOOL_LENGTH : role === "assistant" ? MAX_CHAT_ASSISTANT_LENGTH : MAX_CHAT_MESSAGE_LENGTH;
+}
 
 /**
  * Validates the running conversation the chatbot's browser client sends back
@@ -348,8 +356,9 @@ export function validateChatMessages(body: unknown): ChatCompletionMessage[] {
     if (m.content !== null && m.content !== undefined && typeof m.content !== "string") {
       throw new ValidationError({ messages: `messages[${index}].content must be a string or null` });
     }
-    if (typeof m.content === "string" && m.content.length > MAX_CHAT_MESSAGE_LENGTH) {
-      throw new ValidationError({ messages: `messages[${index}].content must be ${MAX_CHAT_MESSAGE_LENGTH} characters or fewer` });
+    const limit = chatContentLimit(m.role);
+    if (typeof m.content === "string" && m.content.length > limit) {
+      throw new ValidationError({ messages: `messages[${index}].content must be ${limit} characters or fewer` });
     }
     if (m.role === "tool" && typeof m.tool_call_id !== "string") {
       throw new ValidationError({ messages: `messages[${index}].tool_call_id is required for tool messages` });

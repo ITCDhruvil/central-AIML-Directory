@@ -1,3 +1,4 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import { notFound } from "next/navigation";
 import { getProjectById } from "@/lib/projects";
 import { ProjectForm } from "@/components/ProjectForm";
@@ -7,8 +8,9 @@ export default async function EditProjectPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  const { access } = await requirePagePermission("projects", "edit");
   const { id } = await params;
-  const project = await getProjectById(id);
+  const project = await getProjectById(id, access);
 
   if (!project) {
     notFound();

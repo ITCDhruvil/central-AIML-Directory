@@ -3,9 +3,10 @@
 import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { MoreHorizontal, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, RefreshCw, Trash2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { GithubIcon } from "@/components/icons/GithubIcon";
+import { useCan } from "@/components/AuthProvider";
 import { useClickOutside } from "@/lib/useClickOutside";
 
 export function ProjectCardMenu({
@@ -23,6 +24,8 @@ export function ProjectCardMenu({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const canEdit = useCan("projects", "edit");
+  const canDelete = useCan("projects", "delete");
 
   useClickOutside(menuRef, () => setMenuOpen(false), menuOpen);
 
@@ -50,6 +53,8 @@ export function ProjectCardMenu({
   const itemClasses =
     "flex items-center gap-2 px-3 py-1.5 text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800";
 
+  if (!canEdit && !canDelete && !githubUrl) return null;
+
   return (
     <>
       <div ref={menuRef} className="relative shrink-0">
@@ -60,37 +65,43 @@ export function ProjectCardMenu({
           onClick={() => setMenuOpen((v) => !v)}
           className="flex h-6 w-6 items-center justify-center rounded text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
         >
-          <MoreHorizontal size={16} />
+          <MoreVertical size={16} />
         </button>
         {menuOpen && (
           <div className="absolute right-0 z-10 mt-1 w-44 rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
-            <Link href={`/projects/${id}/edit`} className={itemClasses} onClick={() => setMenuOpen(false)}>
-              <Pencil size={14} />
-              Edit
-            </Link>
+            {canEdit && (
+              <Link href={`/projects/${id}/edit`} className={itemClasses} onClick={() => setMenuOpen(false)}>
+                <Pencil size={14} />
+                Edit
+              </Link>
+            )}
             {githubUrl && (
               <>
                 <a href={githubUrl} target="_blank" rel="noopener noreferrer" className={itemClasses} onClick={() => setMenuOpen(false)}>
                   <GithubIcon size={14} />
                   Open GitHub
                 </a>
-                <Link href={`/projects/${id}#sync`} className={itemClasses} onClick={() => setMenuOpen(false)}>
-                  <RefreshCw size={14} />
-                  Sync GitHub
-                </Link>
+                {canEdit && (
+                  <Link href={`/projects/${id}#sync`} className={itemClasses} onClick={() => setMenuOpen(false)}>
+                    <RefreshCw size={14} />
+                    Sync GitHub
+                  </Link>
+                )}
               </>
             )}
-            <button
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                setConfirmOpen(true);
-              }}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
-            >
-              <Trash2 size={14} />
-              Delete
-            </button>
+            {canDelete && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenuOpen(false);
+                  setConfirmOpen(true);
+                }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+              >
+                <Trash2 size={14} />
+                Delete
+              </button>
+            )}
           </div>
         )}
       </div>

@@ -1,10 +1,12 @@
+import { requirePagePermission } from "@/lib/auth/dal";
 import { notFound } from "next/navigation";
 import { getIdeaById } from "@/lib/ideas";
 import { IdeaForm } from "@/components/IdeaForm";
 
 export default async function EditIdeaPage({ params }: { params: Promise<{ id: string }> }) {
+  const { access } = await requirePagePermission("ideas", "edit");
   const { id } = await params;
-  const idea = await getIdeaById(id);
+  const idea = await getIdeaById(id, access);
 
   if (!idea) {
     notFound();

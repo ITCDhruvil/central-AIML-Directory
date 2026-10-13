@@ -1,3 +1,5 @@
+import { audit } from "@/lib/audit";
+import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { IdeaNotFoundError, deleteIdeaById, getIdeaById, updateIdeaFields } from "@/lib/ideas";
 import { ValidationError } from "@/lib/validation";
@@ -5,9 +7,12 @@ import { ValidationError } from "@/lib/validation";
 type RouteParams = { params: Promise<{ id: string }> };
 
 export async function GET(_request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("ideas", "view");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
   try {
-    const idea = await getIdeaById(id);
+    const idea = await getIdeaById(id, auth.access);
     if (!idea) {
       return NextResponse.json({ error: "Idea not found" }, { status: 404 });
     }
@@ -19,6 +24,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("ideas", "edit");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
 
   let body: unknown;
@@ -29,7 +37,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 
   try {
-    const idea = await updateIdeaFields(id, body);
+    const idea = await updateIdeaFields(id, body, auth.access);
+    await audit({
+      action: "idea.updated",
+      actorId: auth.user.id,
+      entityType: "idea",
+      entityId: id,
+      meta: { name: idea.name, fields: typeof body === "object" && body !== null ? Object.keys(body) : [] },
+      request,
+    });
     return NextResponse.json({ idea });
   } catch (error) {
     if (error instanceof ValidationError) {
@@ -43,10 +59,15 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteParams) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  const auth = await apiAuthorize("ideas", "delete");
+  if (!auth.ok) return auth.response;
+
   const { id } = await params;
   try {
-    await deleteIdeaById(id);
+    const before = await getIdeaById(id, auth.access);
+    await deleteIdeaById(id, auth.access);
+    await audit({ action: "idea.deleted", actorId: auth.user.id, entityType: "idea", entityId: id, meta: { name: before?.name }, request });
     return new NextResponse(null, { status: 204 });
   } catch (error) {
     if (error instanceof IdeaNotFoundError) {
