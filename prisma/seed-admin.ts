@@ -12,6 +12,10 @@ async function main() {
   const name = process.env.ADMIN_NAME?.trim() || "Administrator";
   const resetPassword = process.argv.includes("--reset-password");
 
+  if ((!email || !password) && process.argv.includes("--if-configured")) {
+    console.log("ADMIN_EMAIL / ADMIN_PASSWORD not set; skipping admin seed.");
+    return;
+  }
   if (!email || !password) {
     throw new Error("Set ADMIN_EMAIL and ADMIN_PASSWORD in .env.local before running this script.");
   }
