@@ -1,6 +1,7 @@
 // Creates the first admin from ADMIN_EMAIL / ADMIN_PASSWORD (and optional ADMIN_NAME).
 // Idempotent: an existing user with that email is left untouched unless --reset-password is passed.
 // Run: npm run db:seed-admin   (after the auth migration has been applied)
+// --if-configured: skip quietly when ADMIN_EMAIL / ADMIN_PASSWORD are not set (used by the build).
 import { config } from "dotenv";
 
 config({ path: [".env.local", ".env"], quiet: true });
