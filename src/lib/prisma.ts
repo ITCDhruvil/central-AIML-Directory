@@ -16,11 +16,10 @@ function createPrismaClient() {
 }
 
 function getClient() {
-  const client = globalForPrisma.prisma ?? createPrismaClient();
-  if (process.env.NODE_ENV !== "production") {
-    globalForPrisma.prisma = client;
-  }
-  return client;
+  // Cached in every environment: building a client opens a new connection pool, and on a remote database
+  // each fresh connection costs a TCP + TLS handshake on top of the query itself.
+  globalForPrisma.prisma ??= createPrismaClient();
+  return globalForPrisma.prisma;
 }
 
 // Lazy so unit tests can import modules that touch this file without a database.
