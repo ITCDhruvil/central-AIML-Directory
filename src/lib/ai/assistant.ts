@@ -1,7 +1,7 @@
 import type { Project } from "@/types/project";
 import type { Documentation } from "@/types/documentation";
 import { buildProjectContext } from "@/lib/ai/contextBuilder";
-import { ASSISTANT_SYSTEM_PROMPT, buildAssistantUserMessage } from "@/lib/ai/prompts";
+import { ASSISTANT_SYSTEM_PROMPT, buildAssistantUserMessage, type AssistantTurn } from "@/lib/ai/prompts";
 import { parseAssistantResponse } from "@/lib/ai/responseValidator";
 import { resolveCitations } from "@/lib/ai/citations";
 import type { AIConfig, AssistantAnswer, GenerateFn } from "@/lib/ai/types";
@@ -21,12 +21,13 @@ export async function answerProjectQuestion(
   question: string,
   config: AIConfig,
   generate: GenerateFn,
+  history: AssistantTurn[] = [],
 ): Promise<AssistantAnswer> {
   const built = buildProjectContext(
     documents.map((d) => ({ documentId: d.id, title: d.title, category: d.category, content: d.content })),
   );
 
-  const userMessage = buildAssistantUserMessage(project, built, question);
+  const userMessage = buildAssistantUserMessage(project, built, question, history);
   const raw = await generate(ASSISTANT_SYSTEM_PROMPT, userMessage, config);
 
   const parsed = parseAssistantResponse(raw);

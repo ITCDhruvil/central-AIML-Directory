@@ -49,6 +49,38 @@ async function currentUsage(userId: string): Promise<{ requestsToday: number; to
 
 type Handler<Ctx> = (request: NextRequest, ctx: Ctx) => Promise<Response>;
 
+type GuardedUser = { id: string };
+
+/** The master switch, the per-feature switch and the person's quota. A response means "blocked"; null means go ahead. */
+async function blockedResponse(user: GuardedUser, feature: AiFeature): Promise<NextResponse | null> {
+  const settings = await getAiSettings();
+  if (!isFeatureOn(settings, feature)) {
+    await logUsage({ userId: user.id, feature, status: "BLOCKED_PERMISSION" });
+    return NextResponse.json(
+      {
+        error: settings.enabled
+          ? "This AI feature has been turned off by an administrator."
+          : "AI features have been turned off by an administrator.",
+      },
+      { status: 503 },
+    );
+  }
+
+  const override = await prisma.aiQuota.findUnique({
+    where: { userId: user.id },
+    select: { dailyRequests: true, monthlyTokens: true },
+  });
+  const limits = effectiveLimits(settings, override);
+  if (limits.dailyRequests !== null || limits.monthlyTokens !== null) {
+    const decision = decideQuota(limits, await currentUsage(user.id));
+    if (!decision.allowed) {
+      await logUsage({ userId: user.id, feature, status: "BLOCKED_QUOTA" });
+      return NextResponse.json({ error: decision.message }, { status: 429 });
+    }
+  }
+  return null;
+}
+
 /**
  * Wraps an AI route. Before it runs: the master switch, the per-feature switch and the person's quota. While it runs:
  * the model client reports token use. After: one row in the usage log. Signed-out or unpermitted callers pass straight
@@ -60,31 +92,8 @@ export function guardedAi<Ctx>(feature: AiFeature, handler: Handler<Ctx>): Handl
     const user = await getCurrentUser();
     if (!user || user.mustChangePassword || !can(user.permissions, feature, "use")) return handler(request, ctx);
 
-    const settings = await getAiSettings();
-    if (!isFeatureOn(settings, feature)) {
-      await logUsage({ userId: user.id, feature, status: "BLOCKED_PERMISSION" });
-      return NextResponse.json(
-        {
-          error: settings.enabled
-            ? "This AI feature has been turned off by an administrator."
-            : "AI features have been turned off by an administrator.",
-        },
-        { status: 503 },
-      );
-    }
-
-    const override = await prisma.aiQuota.findUnique({
-      where: { userId: user.id },
-      select: { dailyRequests: true, monthlyTokens: true },
-    });
-    const limits = effectiveLimits(settings, override);
-    if (limits.dailyRequests !== null || limits.monthlyTokens !== null) {
-      const decision = decideQuota(limits, await currentUsage(user.id));
-      if (!decision.allowed) {
-        await logUsage({ userId: user.id, feature, status: "BLOCKED_QUOTA" });
-        return NextResponse.json({ error: decision.message }, { status: 429 });
-      }
-    }
+    const blocked = await blockedResponse(user, feature);
+    if (blocked) return blocked;
 
     const { result: response, tally } = await runWithUsage(() => handler(request, ctx));
     if (tally.calls > 0 || response.status >= 500) {
@@ -99,4 +108,37 @@ export function guardedAi<Ctx>(feature: AiFeature, handler: Handler<Ctx>): Handl
     }
     return response;
   };
+}
+
+/**
+ * For a step that uses AI as a bonus inside a larger action (e.g. adding a project): the same switches, quota and usage
+ * log as guardedAi, but "blocked" or "failed" just means null, so the action carries on without the AI part.
+ */
+export async function tryAi<T>(
+  feature: AiFeature,
+  user: { id: string; permissions: Parameters<typeof can>[0] },
+  fn: () => Promise<T>,
+): Promise<T | null> {
+  if (!can(user.permissions, feature, "use")) return null;
+  if (await blockedResponse(user, feature)) return null;
+
+  const { result, tally } = await runWithUsage(async () => {
+    try {
+      return { ok: true as const, value: await fn() };
+    } catch (error) {
+      console.error(`${feature} (best effort) failed`, error instanceof Error ? error.message : error);
+      return { ok: false as const };
+    }
+  });
+  if (tally.calls > 0 || !result.ok) {
+    await logUsage({
+      userId: user.id,
+      feature,
+      status: result.ok ? "OK" : "ERROR",
+      model: tally.model,
+      inputTokens: tally.inputTokens,
+      outputTokens: tally.outputTokens,
+    });
+  }
+  return result.ok ? result.value : null;
 }

@@ -3,7 +3,7 @@ import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { getProjectById } from "@/lib/projects";
 import { listDocumentation } from "@/lib/documents";
-import { ValidationError, validateAssistantQuestion } from "@/lib/validation";
+import { ValidationError, validateAssistantHistory, validateAssistantQuestion } from "@/lib/validation";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModel } from "@/lib/ai/client";
 import { answerProjectQuestion, AssistantResponseError } from "@/lib/ai/assistant";
@@ -14,7 +14,7 @@ type RouteParams = { params: Promise<{ id: string }> };
 /**
  * Read-only project knowledge assistant. Loads only this project's own data,
  * never modifies anything, and never forwards raw document content back to
- * the browser as input — the browser sends only the question.
+ * the browser as input — the browser sends only the question and the last few chat messages.
  */
 async function handlePost(request: NextRequest, { params }: RouteParams) {
   const auth = await apiAuthorize("ai_project_assistant", "use");
@@ -58,7 +58,14 @@ async function handlePost(request: NextRequest, { params }: RouteParams) {
 
   try {
     const documents = await listDocumentation(project.id);
-    const result = await answerProjectQuestion(project, documents, question, config, callAssistantModel);
+    const result = await answerProjectQuestion(
+      project,
+      documents,
+      question,
+      config,
+      callAssistantModel,
+      validateAssistantHistory(body),
+    );
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof AIProviderError) {

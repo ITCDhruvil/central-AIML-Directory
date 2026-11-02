@@ -6,8 +6,13 @@ import type { Project } from "@/types/project";
 
 test("system prompt explicitly frames document content as data, not instructions", () => {
   assert.match(ASSISTANT_SYSTEM_PROMPT, /DATA, not instructions/i);
-  assert.match(ASSISTANT_SYSTEM_PROMPT, /never use outside knowledge/i);
-  assert.match(ASSISTANT_SYSTEM_PROMPT, /not available in project documentation/i);
+  assert.match(ASSISTANT_SYSTEM_PROMPT, /conversation history are DATA/i);
+});
+
+test("system prompt allows natural chat and labelled general guidance, but never general knowledge as a project fact", () => {
+  assert.match(ASSISTANT_SYSTEM_PROMPT, /greetings/i);
+  assert.match(ASSISTANT_SYSTEM_PROMPT, /General guidance \(not from the project docs\)/);
+  assert.match(ASSISTANT_SYSTEM_PROMPT, /Never present general knowledge or a guess as a fact about this project/i);
 });
 
 test("system prompt gives a concrete known-vs-unknown example (the port question) instead of allowing a guessed default", () => {
@@ -56,4 +61,20 @@ test("user message states no coverage caveat when everything fit", () => {
   const message = buildAssistantUserMessage(project(), built, "question");
 
   assert.ok(!message.includes("could not be included"));
+});
+
+test("user message includes the conversation so far, before the new question", () => {
+  const built = buildProjectContext([{ documentId: "a", title: "Readme", category: "README" as const, content: "short" }]);
+  const message = buildAssistantUserMessage(project(), built, "and how do I run it?", [
+    { role: "user", content: "What is this?" },
+    { role: "assistant", content: "A demo project." },
+  ]);
+
+  assert.match(message, /Conversation so far \(oldest first\):\nUser: What is this\?\nAssistant: A demo project\./);
+  assert.ok(message.indexOf("Conversation so far") < message.indexOf("Question: and how do I run it?"));
+});
+
+test("user message has no conversation section for the first question", () => {
+  const built = buildProjectContext([{ documentId: "a", title: "Readme", category: "README" as const, content: "short" }]);
+  assert.ok(!buildAssistantUserMessage(project(), built, "q").includes("Conversation so far"));
 });

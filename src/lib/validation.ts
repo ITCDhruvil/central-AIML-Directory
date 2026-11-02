@@ -321,6 +321,29 @@ export function validateAssistantQuestion(body: unknown): string {
   return question;
 }
 
+export const MAX_ASSISTANT_HISTORY_TURNS = 6;
+const MAX_ASSISTANT_HISTORY_LENGTH = 2000;
+
+/**
+ * The last few messages of the conversation, sent back so follow-up questions make sense. Anything malformed is
+ * dropped instead of failing the request, and only the most recent turns are kept, each cut to a safe length. These
+ * are untrusted text: the system prompt treats them as data, like the documents.
+ */
+export function validateAssistantHistory(body: unknown): { role: "user" | "assistant"; content: string }[] {
+  if (typeof body !== "object" || body === null) return [];
+  const raw = (body as Record<string, unknown>).history;
+  if (!Array.isArray(raw)) return [];
+
+  const turns: { role: "user" | "assistant"; content: string }[] = [];
+  for (const item of raw) {
+    if (typeof item !== "object" || item === null) continue;
+    const { role, content } = item as Record<string, unknown>;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string" || !content.trim()) continue;
+    turns.push({ role, content: content.trim().slice(0, MAX_ASSISTANT_HISTORY_LENGTH) });
+  }
+  return turns.slice(-MAX_ASSISTANT_HISTORY_TURNS);
+}
+
 export const MAX_CHAT_MESSAGES = 40;
 // What a person types. Replies and tool results are far longer (a table of ten projects, a full list_* result) and the
 // browser sends them back as history on the next turn, so they get their own, larger limits.
