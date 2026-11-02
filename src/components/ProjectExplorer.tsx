@@ -141,10 +141,9 @@ export function ProjectExplorer({
     }
   }
 
-  // Start on the user's own projects when they have any; otherwise everything they can see.
-  const [defaultOwner] = useState(() =>
-    initialProjects.some((p) => matchesOwnerFilter(p, "me", myOwnerNames, authUser?.id)) ? "me" : "",
-  );
+  // Start on everything the person can see. "My projects" is one click away in the Owner filter; opening on it by default
+  // hid most projects as soon as someone owned one (owner names are free text, so many projects belong to nobody's login).
+  const defaultOwner = "";
   const [ownerFilter, setOwnerFilter] = useState(defaultOwner);
   const [retryToken, setRetryToken] = useState(0);
 
