@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { audit } from "@/lib/audit";
 import { getCurrentUser } from "@/lib/auth/dal";
 import { MAX_AVATAR_BYTES, validateAvatar } from "@/lib/avatar";
+import { invalidatePeopleDirectory } from "@/lib/people";
 import { prisma } from "@/lib/prisma";
 
 // A little headroom over the picture itself, for the request's own overhead.
@@ -39,6 +40,8 @@ export async function PUT(request: NextRequest) {
       update: { data: Buffer.from(bytes), contentType: checked.type },
       select: { updatedAt: true },
     });
+    // Everyone else's screens look pictures up in the people directory; make it forget the old one.
+    invalidatePeopleDirectory();
     await audit({ action: "user.avatar_changed", actorId: auth.user.id, entityType: "user", entityId: auth.user.id, meta: { removed: false }, request });
     return NextResponse.json({ ok: true, version: row.updatedAt.getTime() });
   } catch (error) {
@@ -54,6 +57,7 @@ export async function DELETE(request: NextRequest) {
 
   try {
     const removed = await prisma.userAvatar.deleteMany({ where: { userId: auth.user.id } });
+    invalidatePeopleDirectory();
     if (removed.count > 0) {
       await audit({ action: "user.avatar_changed", actorId: auth.user.id, entityType: "user", entityId: auth.user.id, meta: { removed: true }, request });
     }

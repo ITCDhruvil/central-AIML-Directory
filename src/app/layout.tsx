@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { AppShell } from "@/components/AppShell";
 import { BrandingProvider } from "@/components/BrandingProvider";
+import { PeopleProvider } from "@/components/PeopleProvider";
 import { PolicyProvider } from "@/components/PolicyProvider";
+import { getPeopleDirectory } from "@/lib/people";
 import { documentTitle } from "@/lib/branding";
 import { getBranding } from "@/lib/brandingSettings";
 import { getSecurityPolicy } from "@/lib/securityPolicySettings";
@@ -28,7 +30,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function RootLayout({ children }: LayoutProps<"/">) {
-  const [user, policy, branding] = await Promise.all([getCurrentUser(), getSecurityPolicy(), getBranding()]);
+  const [user, policy, branding, people] = await Promise.all([
+    getCurrentUser(),
+    getSecurityPolicy(),
+    getBranding(),
+    getPeopleDirectory(),
+  ]);
   return (
     <html
       lang="en"
@@ -42,7 +49,9 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       <body className="h-screen overflow-hidden">
         <BrandingProvider branding={branding}>
           <PolicyProvider policy={policy}>
-            <AppShell user={user}>{children}</AppShell>
+            <PeopleProvider directory={people}>
+              <AppShell user={user}>{children}</AppShell>
+            </PeopleProvider>
           </PolicyProvider>
         </BrandingProvider>
       </body>

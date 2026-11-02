@@ -13,6 +13,7 @@ import { cn } from "@/lib/cn";
 import type { AdminUserDto } from "@/lib/auth/adminUsers";
 import type { PermissionSet, Role, Scope } from "@/lib/auth/permissions";
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from "@/lib/auth/permissionLabels";
+import { PersonAvatar } from "@/components/PeopleProvider";
 
 export type OwnerOption = { id: string; name: string; userId: string | null; userName: string | null };
 
@@ -187,9 +188,12 @@ export function UserDetail({
         All users
       </Link>
 
-      <div>
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{user.name}</h1>
-        <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{user.email}</p>
+      <div className="flex items-center gap-4">
+        <PersonAvatar userId={user.id} name={user.name} size={56} className="text-lg" />
+        <div>
+          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">{user.name}</h1>
+          <p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">{user.email}</p>
+        </div>
       </div>
 
       {tempPassword && (

@@ -6,6 +6,7 @@ import { Plus, Search, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Modal } from "@/components/ui/Modal";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import { cn } from "@/lib/cn";
 import { MEMBER_ROLES, MEMBER_ROLE_DESCRIPTIONS, memberRoleLabel, type MemberRole } from "@/lib/auth/membership";
 import type { ProjectTeamMember } from "@/types/project";
@@ -20,12 +21,8 @@ const ROLE_PILL: Record<MemberRole, string> = {
   VIEW: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
 };
 
-function Avatar({ name }: { name: string }) {
-  return (
-    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-orange-50 text-xs font-semibold text-orange-700 dark:bg-orange-500/15 dark:text-orange-300">
-      {name.trim().charAt(0).toUpperCase()}
-    </span>
-  );
+function Avatar({ userId, name }: { userId: string; name: string }) {
+  return <PersonAvatar userId={userId} name={name} size={32} />;
 }
 
 function ManageTeamModal({
@@ -153,7 +150,7 @@ function ManageTeamModal({
                     onClick={() => add(u)}
                     className="flex w-full items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/60"
                   >
-                    <Avatar name={u.name} />
+                    <Avatar userId={u.id} name={u.name} />
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{u.name}</span>
                       <span className="block truncate text-xs text-zinc-400">{u.email}</span>
@@ -178,7 +175,7 @@ function ManageTeamModal({
             <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
               {members.map((m) => (
                 <li key={m.userId} className="flex items-center gap-3 px-3 py-2.5">
-                  <Avatar name={m.name} />
+                  <Avatar userId={m.userId} name={m.name} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.name}</p>
                     <p className="truncate text-xs text-zinc-400">{MEMBER_ROLE_DESCRIPTIONS[m.role]}</p>
@@ -242,7 +239,7 @@ export function ProjectTeam({
         <ul className="space-y-2.5">
           {team.map((m) => (
             <li key={m.userId} className="flex items-center gap-2.5">
-              <Avatar name={m.name} />
+              <Avatar userId={m.userId} name={m.name} />
               <span className="min-w-0 flex-1 truncate text-sm font-medium text-zinc-800 dark:text-zinc-100">{m.name}</span>
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-medium", ROLE_PILL[m.role])}>{memberRoleLabel(m.role)}</span>
             </li>

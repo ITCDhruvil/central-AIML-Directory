@@ -5,6 +5,7 @@ import { KeyRound, X } from "lucide-react";
 import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
 import { RESET_REQUESTS_CHANGED } from "@/lib/resetRequestEvents";
 import type { ResetRequestDto } from "@/lib/passwordResets";
+import { PersonAvatar } from "@/components/PeopleProvider";
 
 function formatWhen(iso: string): string {
   return new Date(iso).toLocaleString("en-US", {
@@ -107,6 +108,7 @@ export function ResetRequests({ initial }: { initial: ResetRequestDto[] }) {
                 key={r.id}
                 className="flex flex-wrap items-center gap-3 px-4 py-3"
               >
+                <PersonAvatar userId={r.userId} name={r.name} size={32} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">
                     {r.name}

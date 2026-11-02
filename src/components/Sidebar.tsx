@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -27,6 +27,8 @@ import { cn } from "@/lib/cn";
 import { CHAT_HISTORY_KEY } from "@/lib/chatHistory";
 import { RESET_REQUESTS_CHANGED } from "@/lib/resetRequestEvents";
 import { Avatar } from "@/components/Avatar";
+
+const RESET_CHECK_INTERVAL_MS = 60_000;
 
 // Lucide icons and our own (GlowBulbIcon) share this shape.
 type NavIcon = React.ElementType<{
@@ -163,6 +165,7 @@ export function Sidebar({
   const canAdmin = can(user.permissions, "users", "view");
   const canResolveResets = can(user.permissions, "users", "edit");
   const [resetCount, setResetCount] = useState(0);
+  const lastResetCheck = useRef(0);
 
   async function signOut() {
     await fetch("/api/auth/logout", { method: "POST" });
@@ -176,11 +179,15 @@ export function Sidebar({
     router.refresh();
   }
 
-  // Open "forgot password" requests, shown as a bubble on Users. Refreshes on navigation, so resolving one clears it.
+  // Open "forgot password" requests, shown as a bubble on Users. Resolving one fires RESET_REQUESTS_CHANGED, which
+  // refreshes straight away; plain navigation only re-checks after a minute, because each check is a full signed-in
+  // request with several database queries and clicking around should not pay for it every time.
   useEffect(() => {
     if (!canResolveResets) return;
     let cancelled = false;
-    function load() {
+    function load(force: boolean) {
+      if (!force && Date.now() - lastResetCheck.current < RESET_CHECK_INTERVAL_MS) return;
+      lastResetCheck.current = Date.now();
       fetch("/api/admin/reset-requests")
         .then((res) => (res.ok ? res.json() : null))
         .then((data: { requests?: unknown[] } | null) => {
@@ -188,11 +195,12 @@ export function Sidebar({
         })
         .catch(() => {});
     }
-    load();
-    window.addEventListener(RESET_REQUESTS_CHANGED, load);
+    const onChanged = () => load(true);
+    load(false);
+    window.addEventListener(RESET_REQUESTS_CHANGED, onChanged);
     return () => {
       cancelled = true;
-      window.removeEventListener(RESET_REQUESTS_CHANGED, load);
+      window.removeEventListener(RESET_REQUESTS_CHANGED, onChanged);
     };
   }, [canResolveResets, pathname]);
 

@@ -12,6 +12,7 @@ import { saveProjectFields } from "@/lib/saveProjectFields";
 import { isEditableWhenEmpty } from "@/lib/projectCellEdit";
 import { COLUMN_META, ownerOptions, type ColumnId, type SortState } from "@/lib/projectTable";
 import { stripMarkdown } from "@/lib/stripMarkdown";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import type { Project, ProjectStatus } from "@/types/project";
 
 const CHIP_TONES = [
@@ -146,22 +147,28 @@ function Cell({
       );
     case "owner": {
       // The team when there is one (Owners first); otherwise the free-text owner.
-      const people = project.team && project.team.length > 0 ? project.team.map((m) => m.name) : project.owner ? [project.owner] : [];
+      const people =
+        project.team && project.team.length > 0
+          ? project.team.map((m) => ({ userId: m.userId, name: m.name }))
+          : project.owner
+            ? [{ userId: null, name: project.owner }]
+            : [];
       if (people.length === 0) return blank();
       const shown = people.slice(0, 3);
       return (
-        <span className="inline-flex min-w-0 items-center gap-2 text-zinc-700 dark:text-zinc-200" title={people.join(", ")}>
+        <span className="inline-flex min-w-0 items-center gap-2 text-zinc-700 dark:text-zinc-200" title={people.map((p) => p.name).join(", ")}>
           <span className="flex shrink-0 -space-x-1.5">
-            {shown.map((name) => (
-              <span
-                key={name}
-                className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-[10px] font-semibold text-orange-700 ring-2 ring-white dark:bg-orange-500/20 dark:text-orange-300 dark:ring-zinc-900"
-              >
-                {name.trim().charAt(0).toUpperCase()}
-              </span>
+            {shown.map((person) => (
+              <PersonAvatar
+                key={person.userId ?? person.name}
+                userId={person.userId}
+                name={person.name}
+                size={24}
+                className="ring-2 ring-white dark:ring-zinc-900"
+              />
             ))}
           </span>
-          <span className="truncate">{people[0]}</span>
+          <span className="truncate">{people[0].name}</span>
           {people.length > 1 && <span className="shrink-0 text-xs text-zinc-400">+{people.length - 1}</span>}
         </span>
       );

@@ -12,6 +12,7 @@ import { Switch } from "@/components/ui/Switch";
 import { cn } from "@/lib/cn";
 import type { AdminUserDto } from "@/lib/auth/adminUsers";
 import type { PermissionSet, Role } from "@/lib/auth/permissions";
+import { PersonAvatar } from "@/components/PeopleProvider";
 
 function formatLogin(iso: string | null): string {
   if (!iso) return "Never";
@@ -107,14 +108,19 @@ export function UsersAdmin({
             {users.map((user) => (
               <tr key={user.id} className={cn(!user.active && "opacity-60")}>
                 <td className="px-4 py-2.5">
-                  <div className="font-medium text-zinc-900 dark:text-zinc-100">
-                    {user.name}
-                    {user.id === currentUserId && <span className="ml-1.5 text-[11px] text-zinc-400">(you)</span>}
+                  <div className="flex items-center gap-3">
+                    <PersonAvatar userId={user.id} name={user.name} size={32} />
+                    <div className="min-w-0">
+                      <div className="font-medium text-zinc-900 dark:text-zinc-100">
+                        {user.name}
+                        {user.id === currentUserId && <span className="ml-1.5 text-[11px] text-zinc-400">(you)</span>}
+                      </div>
+                      <div className="text-xs text-zinc-500 dark:text-zinc-400">{user.email}</div>
+                      {user.mustChangePassword && (
+                        <div className="text-[11px] text-orange-600">Must set a new password</div>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{user.email}</div>
-                  {user.mustChangePassword && (
-                    <div className="text-[11px] text-orange-600">Must set a new password</div>
-                  )}
                 </td>
                 <td className="px-3 py-2.5">
                   <Dropdown

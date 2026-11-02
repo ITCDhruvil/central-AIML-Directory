@@ -11,7 +11,9 @@ function createPrismaClient() {
     throw new Error("DATABASE_URL is not set");
   }
 
-  const adapter = new PrismaPg({ connectionString });
+  // Opening a connection to a remote database costs about half a second (TCP + TLS), and the pool's default closes idle
+  // ones after 10 seconds, so a pause while reading a page made the next click pay for it again. Keep them for a minute.
+  const adapter = new PrismaPg({ connectionString, idleTimeoutMillis: 60_000 });
   return new PrismaClient({ adapter });
 }
 

@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/formatDate";
 import { STATUS_ICONS, TYPE_ICONS } from "@/lib/projectOptionIcons";
 import { saveProjectFields } from "@/lib/saveProjectFields";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import {
   PROJECT_STAGES,
   PROJECT_STATUSES,
@@ -223,7 +224,14 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
           />
         ) : (
           <ValueButton label="Owner" muted={!local.owner} onClick={() => requestEdit("owner")}>
-            {local.owner ?? "Not set"}
+            {local.owner ? (
+              <span className="inline-flex min-w-0 items-center gap-1.5">
+                <PersonAvatar name={local.owner} size={20} />
+                <span className="truncate">{local.owner}</span>
+              </span>
+            ) : (
+              "Not set"
+            )}
           </ValueButton>
         )}
       </DetailsRow>

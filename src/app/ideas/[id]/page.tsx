@@ -8,6 +8,7 @@ import { MarkdownView } from "@/components/MarkdownView";
 import { Button, type IconType } from "@/components/ui/Button";
 import { Breadcrumb1 } from "@/components/ui/breadcrumb-01";
 import { formatDate } from "@/lib/formatDate";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import { IDEA_STATUS_ICONS } from "@/lib/ideaOptionIcons";
 
 function SectionCard({ icon: Icon, title, children }: { icon: IconType; title: string; children: React.ReactNode }) {
@@ -97,7 +98,20 @@ export default async function IdeaDetailPage({ params }: { params: Promise<{ id:
                 label="Status"
                 value={<IdeaStatusBadge status={idea.status} />}
               />
-              <InfoRow icon={User} label="Owner" value={idea.owner ?? "Not set"} />
+              <InfoRow
+                icon={User}
+                label="Owner"
+                value={
+                  idea.owner ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      <PersonAvatar name={idea.owner} size={20} />
+                      {idea.owner}
+                    </span>
+                  ) : (
+                    "Not set"
+                  )
+                }
+              />
               <InfoRow icon={CalendarPlus} label="Created" value={formatDate(idea.createdAt)} />
               <InfoRow icon={History} label="Last Updated" value={formatDate(idea.updatedAt)} />
             </div>

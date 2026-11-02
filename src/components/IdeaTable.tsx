@@ -12,6 +12,7 @@ import { formatRelativeTime } from "@/lib/formatRelativeTime";
 import type { IdeaColumn, IdeaSort } from "@/lib/ideaExplorer";
 import { saveIdeaFields } from "@/lib/saveIdeaFields";
 import { stripMarkdown } from "@/lib/stripMarkdown";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import type { Idea, IdeaStatus } from "@/types/idea";
 
 const COLUMNS: { id: IdeaColumn; label: string; width: string }[] = [
@@ -124,9 +125,7 @@ function Cell({
           className="inline-flex min-w-0 items-center gap-2 text-zinc-700 dark:text-zinc-200"
           title={idea.owner}
         >
-          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-50 text-[10px] font-semibold text-orange-700 dark:bg-orange-500/20 dark:text-orange-300">
-            {idea.owner.trim().charAt(0).toUpperCase()}
-          </span>
+          <PersonAvatar name={idea.owner} size={24} />
           <span className="truncate">{idea.owner}</span>
         </span>
       ) : (

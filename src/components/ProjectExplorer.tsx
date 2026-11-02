@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthUser, useCan } from "@/components/AuthProvider";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertCircle, LayoutGrid, List, Plus, SearchX, X } from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
@@ -82,12 +82,23 @@ export function ProjectExplorer({
   const router = useRouter();
   const searchParams = useSearchParams();
   const [projects, setProjects] = useState<Project[]>(initialProjects);
+  // True while the list on screen came from a search request rather than from the server's own render.
+  const replacedByFetch = useRef(false);
   const [loading, startTransition] = useTransition();
   const [loadError, setLoadError] = useState(false);
 
   const urlQ = searchParams.get("q") ?? "";
   const [q, setQ] = useState(urlQ);
   const [prevUrlQ, setPrevUrlQ] = useState(urlQ);
+
+  // A fresh list from the server (after router.refresh(), e.g. a project was deleted) replaces what is shown, with no
+  // extra request: the server already did the query. While a search is showing, its own request below keeps the list
+  // up to date instead (typing changes the URL, which re-renders the page with a new, unfiltered list).
+  const [prevInitialProjects, setPrevInitialProjects] = useState(initialProjects);
+  if (initialProjects !== prevInitialProjects) {
+    setPrevInitialProjects(initialProjects);
+    if (!(isPage && q.trim())) setProjects(initialProjects);
+  }
   const [type, setType] = useState<string[]>(() =>
     initialFilters?.type && (PROJECT_TYPES as readonly string[]).includes(initialFilters.type) ? [initialFilters.type] : [],
   );
@@ -173,9 +184,14 @@ export function ProjectExplorer({
   // unchanged from Phase 7 except `q` no longer feeds this endpoint, since
   // `q` now drives global search instead (see the effect below).
   useEffect(() => {
+    const searching = isPage && q.trim().length > 0;
+    // The server already rendered this list (initialProjects), so the first load needs no request. Ask again only for a
+    // server-side search, to retry after an error, or to restore the full list once a search is cleared.
+    if (!searching && retryToken === 0 && !replacedByFetch.current) return;
+
     const controller = new AbortController();
     const params = new URLSearchParams();
-    if (isPage && q.trim()) params.set("q", q.trim());
+    if (searching) params.set("q", q.trim());
 
     const run = () => startTransition(async () => {
       try {
@@ -186,6 +202,7 @@ export function ProjectExplorer({
         }
         const body = await res.json();
         setProjects(body.projects ?? []);
+        replacedByFetch.current = searching;
         setLoadError(false);
       } catch (err) {
         if (!(err instanceof Error) || err.name !== "AbortError") setLoadError(true);
@@ -199,10 +216,6 @@ export function ProjectExplorer({
       window.clearTimeout(timer);
       controller.abort();
     };
-    // `initialProjects` is included so that a server refresh elsewhere on this
-    // page (e.g. deleting a project from a card menu, which calls
-    // router.refresh()) re-fetches instead of leaving this component's state
-    // stale — useState(initialProjects) only seeds the very first render.
   }, [retryToken, initialProjects, isPage, q]);
 
   // Global search mode: `q` now searches project name/description/technology

@@ -35,19 +35,24 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
   const session = await readSession();
   if (!session) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.uid },
-    include: { permissions: true, avatar: { select: { updatedAt: true } } },
-  });
+  // Every page and API call starts here, and each database round trip costs tens of milliseconds. These four lookups do
+  // not depend on each other (the role table is small, so it is read whole and filtered to this user's role below), so
+  // they are sent together and cost one round trip instead of four in a row.
+  const [user, overrides, avatar, allRoleRows] = await Promise.all([
+    // The password hash is only needed when signing in, never to know who is making a request.
+    prisma.user.findUnique({ where: { id: session.uid }, omit: { passwordHash: true } }),
+    prisma.userPermission.findMany({ where: { userId: session.uid } }),
+    prisma.userAvatar.findUnique({ where: { userId: session.uid }, select: { updatedAt: true } }),
+    prisma.rolePermission.findMany(),
+  ]);
   if (!user || !user.active || user.sessionVersion !== session.sv) return null;
 
   const role = asRole(user.role);
-  const roleRows = await prisma.rolePermission.findMany({ where: { role } });
   const permissions = resolvePermissions(
     role,
     DEFAULT_ROLE_MATRIX[role],
-    asRows(user.permissions),
-    asRows(roleRows),
+    asRows(overrides),
+    asRows(allRoleRows.filter((row) => row.role === role)),
   );
 
   return {
@@ -56,7 +61,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     name: user.name,
     role,
     mustChangePassword: user.mustChangePassword,
-    avatarVersion: user.avatar?.updatedAt.getTime() ?? null,
+    avatarVersion: avatar?.updatedAt.getTime() ?? null,
     permissions,
   };
 });

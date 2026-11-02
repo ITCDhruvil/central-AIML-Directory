@@ -7,6 +7,7 @@ export type UserUsage = { userId: string; name: string; email: string; requests:
 export type RecentUsage = {
   id: string;
   createdAt: string;
+  userId: string;
   userName: string;
   feature: string;
   model: string | null;
@@ -72,6 +73,7 @@ export async function getUsageReport(days: number): Promise<UsageReport> {
     recent: rows.slice(0, 50).map((r) => ({
       id: r.id,
       createdAt: r.createdAt.toISOString(),
+      userId: r.userId,
       userName: r.user.name,
       feature: r.feature,
       model: r.model,

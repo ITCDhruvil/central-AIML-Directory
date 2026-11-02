@@ -5,6 +5,7 @@ import { SettingsCard } from "@/components/settings/SettingsCard";
 import { RESOURCE_LABELS } from "@/lib/auth/permissionLabels";
 import type { UsageReport } from "@/lib/ai/usageReport";
 import { cn } from "@/lib/cn";
+import { PersonAvatar } from "@/components/PeopleProvider";
 
 const RANGES = [7, 14, 30, 90] as const;
 
@@ -234,8 +235,9 @@ export function AiUsage() {
                       key={u.userId}
                       className="flex items-center justify-between gap-3 py-2.5 text-sm"
                     >
-                      <span className="min-w-0 truncate font-medium text-zinc-800 dark:text-zinc-200">
-                        {u.name}
+                      <span className="flex min-w-0 items-center gap-2 font-medium text-zinc-800 dark:text-zinc-200">
+                        <PersonAvatar userId={u.userId} name={u.name} size={24} />
+                        <span className="truncate">{u.name}</span>
                       </span>
                       <span className="shrink-0 tabular-nums text-zinc-500 dark:text-zinc-400">
                         {num(u.requests)} req · {compact(u.tokens)} tok
@@ -274,7 +276,10 @@ export function AiUsage() {
                             {when(r.createdAt)}
                           </td>
                           <td className="px-3 py-2 text-zinc-800 dark:text-zinc-200">
-                            {r.userName}
+                            <span className="flex items-center gap-2">
+                              <PersonAvatar userId={r.userId} name={r.userName} size={20} />
+                              {r.userName}
+                            </span>
                           </td>
                           <td className="px-3 py-2 text-zinc-600 dark:text-zinc-300">
                             {RESOURCE_LABELS[r.feature] ?? r.feature}

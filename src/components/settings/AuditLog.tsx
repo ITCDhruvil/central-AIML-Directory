@@ -8,6 +8,7 @@ import { AUDIT_CATEGORIES, describeMeta } from "@/lib/auditCatalog";
 import { AUDIT_PAGE_SIZE, filterToParams } from "@/lib/auditFilter";
 import type { AuditEntryDto } from "@/lib/auditQuery";
 import { cn } from "@/lib/cn";
+import { PersonAvatar } from "@/components/PeopleProvider";
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "All activity" },
@@ -188,14 +189,19 @@ export function AuditLog() {
                       {when(e.createdAt)}
                     </td>
                     <td className="px-3 py-2.5">
-                      <p className="font-medium text-zinc-800 dark:text-zinc-200">
-                        {e.actorName ?? "Unknown"}
-                      </p>
-                      {e.actorEmail && (
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {e.actorEmail}
-                        </p>
-                      )}
+                      <div className="flex items-center gap-2.5">
+                        <PersonAvatar userId={e.actorId} name={e.actorName ?? "?"} size={28} />
+                        <div className="min-w-0">
+                          <p className="font-medium text-zinc-800 dark:text-zinc-200">
+                            {e.actorName ?? "Unknown"}
+                          </p>
+                          {e.actorEmail && (
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                              {e.actorEmail}
+                            </p>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-2.5">
                       <span className="font-medium text-zinc-800 dark:text-zinc-200">
