@@ -16,5 +16,5 @@ export function formatRelativeTime(iso: string, now: number = Date.now()): strin
   }
   const days = Math.floor(diff / DAY);
   if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
-  return new Date(iso).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return new Date(iso).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
 }

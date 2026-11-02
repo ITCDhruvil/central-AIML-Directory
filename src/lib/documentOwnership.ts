@@ -1,4 +1,4 @@
-import type { DocumentSource } from "@/types/documentation";
+import { UPLOAD_SOURCE } from "@/types/documentation";
 
 /**
  * Only manually-created documents can be edited or deleted through the
@@ -11,17 +11,29 @@ export function isEditableDocument(source: string): boolean {
   return source === "manual";
 }
 
+/** Uploaded files can be removed but not edited: there is no text to edit. */
 export function isDeletableDocument(source: string): boolean {
-  return source === "manual";
+  return source === "manual" || source === UPLOAD_SOURCE;
 }
 
-const SOURCE_LABELS: Record<DocumentSource, string> = {
+const SOURCE_LABELS: Record<string, string> = {
   github: "GitHub",
   generated: "Generated",
   manual: "Manual",
+  [UPLOAD_SOURCE]: "Uploaded",
 };
+
+const ACRONYM_CATEGORIES = new Set(["README", "PRD", "API"]);
+
+/** "AI_RULES" -> "AI rules", "SETUP" -> "Setup"; acronyms stay upper-case. */
+export function documentCategoryLabel(category: string): string {
+  if (ACRONYM_CATEGORIES.has(category)) return category;
+  const words = category.split("_").map((w) => (w === "AI" ? w : w.toLowerCase()));
+  const text = words.join(" ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 /** Human-friendly label — never expose the raw source="..." string in the UI. */
 export function documentSourceLabel(source: string): string {
-  return SOURCE_LABELS[source as DocumentSource] ?? source;
+  return SOURCE_LABELS[source] ?? source;
 }

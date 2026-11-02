@@ -115,6 +115,7 @@ model User {
   sharesGranted  ItemShare[]            @relation("ShareGrantor")
   passwordHistory PasswordHistory[]
   avatar          UserAvatar?
+  githubConnection GithubConnection?
 }
 
 // A person's profile picture. Kept in its own table so the image bytes are never loaded with ordinary user queries;
@@ -124,6 +125,18 @@ model UserAvatar {
   user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   data        Bytes
   contentType String
+  updatedAt   DateTime @updatedAt
+}
+
+// A person's own GitHub OAuth grant, so repository imports run with their access instead of one shared token.
+// accessToken is AES-GCM encrypted (see lib/github/tokenCrypto.ts); never stored or logged in plain text.
+model GithubConnection {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken String
+  login       String
+  scope       String   @default("")
+  createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
 
@@ -293,11 +306,25 @@ model Documentation {
   // manually edited a generated setup guide since it was last (re)generated.
   generatedFromContentHash String?
 
+  // Present only for source="upload": the original file (PDF, image, ...). `content` stays empty for those.
+  file DocumentFile?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, filePath])
   @@index([projectId])
+}
+
+// The bytes of an uploaded document. Kept in its own table, like UserAvatar, so listing documents never loads them.
+model DocumentFile {
+  documentId  String        @id
+  document    Documentation @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  fileName    String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime      @default(now())
 }
 
 // Directory-wide ("catalog") or per-project AI suggestions. Regenerating updates

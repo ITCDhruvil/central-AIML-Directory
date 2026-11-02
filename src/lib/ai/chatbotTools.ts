@@ -4,6 +4,7 @@ import { callAssistantModel } from "@/lib/ai/client";
 import { getAIConfig } from "@/lib/ai/config";
 import { autofillProjectImport } from "@/lib/ai/importAutofill";
 import { GitHubApiError, fetchRepositoryReadme } from "@/lib/github/client";
+import { getUserGithubToken } from "@/lib/github/connection";
 import { parseGitHubRepoUrl } from "@/lib/github/parseUrl";
 import { InsightsResponseError } from "@/lib/ai/insights";
 import { InsightsContextNotFoundError } from "@/lib/ai/insightsContext";
@@ -330,7 +331,7 @@ function editIdeaFormFallback(id: string) {
  * a draft the user reviews before create_project ever saves anything.
  */
 
-async function handleDraftProjectFromGithub(args: Record<string, unknown>) {
+async function handleDraftProjectFromGithub(args: Record<string, unknown>, userId: string) {
   const repoUrl = str(args.repoUrl);
   const parsed = repoUrl ? parseGitHubRepoUrl(repoUrl) : null;
   if (!parsed) {
@@ -353,7 +354,7 @@ async function handleDraftProjectFromGithub(args: Record<string, unknown>) {
   }
 
   try {
-    const readme = await fetchRepositoryReadme(parsed.owner, parsed.repo);
+    const readme = await fetchRepositoryReadme(parsed.owner, parsed.repo, await getUserGithubToken(userId));
     const autofill = await autofillProjectImport(
       {
         repoFullName: `${parsed.owner}/${parsed.repo}`,
@@ -545,7 +546,7 @@ function buildRawHandlers(ctx: ChatbotContext): ToolHandlerMap {
       };
     },
 
-    draft_project_from_github: handleDraftProjectFromGithub,
+    draft_project_from_github: (args) => handleDraftProjectFromGithub(args, user.id),
 
     create_project: async (args) => {
       try {

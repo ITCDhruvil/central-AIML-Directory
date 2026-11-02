@@ -121,10 +121,13 @@ export async function createProject(rawInput: unknown, documents: ValidatedDocum
       },
     });
 
-    for (const doc of documents) {
-      await tx.documentation.upsert({
-        where: { projectId_filePath: { projectId: project.id, filePath: doc.filePath } },
-        create: {
+    // The project is brand new, so one bulk insert replaces a round trip per document (the interactive transaction
+    // has a short timeout, and sequential upserts against a remote database exceeded it for repos with many docs).
+    // Later duplicates of a filePath win, matching the old upsert-in-order behaviour.
+    const docsByPath = new Map(documents.map((doc) => [doc.filePath, doc]));
+    if (docsByPath.size > 0) {
+      await tx.documentation.createMany({
+        data: [...docsByPath.values()].map((doc) => ({
           projectId: project.id,
           title: doc.title,
           category: doc.category,
@@ -132,21 +135,14 @@ export async function createProject(rawInput: unknown, documents: ValidatedDocum
           content: doc.content,
           source: doc.source ?? "github",
           generatedFromContentHash: doc.generatedFromContentHash,
-        },
-        update: {
-          title: doc.title,
-          category: doc.category,
-          content: doc.content,
-          source: doc.source ?? "github",
-          generatedFromContentHash: doc.generatedFromContentHash,
-        },
+        })),
       });
     }
 
     await recordProjectActivity(tx, project.id, "PROJECT_CREATED", `Created project “${project.name}”`);
 
     return project;
-  });
+  }, { timeout: 20_000 });
 
   await ensureOwnerName(input.owner);
   return toProject(row);

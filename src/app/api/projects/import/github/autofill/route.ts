@@ -7,6 +7,7 @@ import { autofillProjectImport, ImportAutofillResponseError } from "@/lib/ai/imp
 import { AUTOFILL_FIELD_TARGETS, AUTOFILL_TARGETS, type AutofillFieldTarget, type AutofillTarget } from "@/lib/ai/importAutofillPrompts";
 import { AIProviderError } from "@/lib/ai/types";
 import { fetchRepositoryReadme, GitHubApiError } from "@/lib/github/client";
+import { getUserGithubToken } from "@/lib/github/connection";
 
 const STATUS_BY_CODE: Record<GitHubApiError["code"], number> = {
   not_found: 404,
@@ -87,7 +88,11 @@ async function handlePost(request: NextRequest) {
 
   try {
     if (!readme.trim()) {
-      const fetched = await fetchRepositoryReadme(parsedRepo.owner, parsedRepo.repo);
+      const fetched = await fetchRepositoryReadme(
+        parsedRepo.owner,
+        parsedRepo.repo,
+        await getUserGithubToken(auth.user.id),
+      );
       readme = fetched.content;
     }
 

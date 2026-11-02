@@ -18,33 +18,36 @@ export class GitHubApiError extends Error {
   }
 }
 
-function authHeaders(): HeadersInit {
+/**
+ * Requests run with the signed-in user's own GitHub token (never a shared server token), so a user can only reach
+ * repositories their own GitHub account can. Without a token only public repositories resolve.
+ */
+function authHeaders(token?: string | null): HeadersInit {
   const headers: HeadersInit = {
     Accept: "application/vnd.github+json",
     "X-GitHub-Api-Version": "2022-11-28",
   };
-  const token = process.env.GITHUB_TOKEN;
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
   return headers;
 }
 
-async function githubFetch(path: string): Promise<Response> {
+async function githubFetch(path: string, token?: string | null): Promise<Response> {
   let res: Response;
   try {
-    res = await fetch(`${GITHUB_API_BASE}${path}`, { headers: authHeaders() });
+    res = await fetch(`${GITHUB_API_BASE}${path}`, { headers: authHeaders(token) });
   } catch {
     throw new GitHubApiError("network", "Could not reach GitHub. Please try again.");
   }
 
   if (res.status === 404) {
-    throw new GitHubApiError("not_found", "Repository not found or you do not have access to it.");
+    throw new GitHubApiError("not_found", "Repository not found, or your connected GitHub account cannot access it.");
   }
   if (res.status === 401) {
     throw new GitHubApiError(
       "unauthorized",
-      "GitHub authentication failed. Check the configured GITHUB_TOKEN.",
+      "Your GitHub connection is no longer valid. Reconnect GitHub and try again.",
     );
   }
   if (res.status === 403) {
@@ -54,7 +57,7 @@ async function githubFetch(path: string): Promise<Response> {
     }
     throw new GitHubApiError(
       "unauthorized",
-      "GitHub denied access to this repository. A GitHub token with access may be required.",
+      "GitHub denied access to this repository. Connect a GitHub account that can access it.",
     );
   }
   if (!res.ok) {
@@ -73,8 +76,8 @@ interface RawGitHubRepository {
   owner: { login: string };
 }
 
-async function fetchGitHubRepository(owner: string, repo: string): Promise<GitHubRepository> {
-  const res = await githubFetch(`/repos/${owner}/${repo}`);
+async function fetchGitHubRepository(owner: string, repo: string, token?: string | null): Promise<GitHubRepository> {
+  const res = await githubFetch(`/repos/${owner}/${repo}`, token);
   const data = (await res.json()) as RawGitHubRepository;
 
   return {
@@ -92,10 +95,10 @@ interface RawGitHubReadme {
   encoding: string;
 }
 
-async function fetchGitHubReadme(owner: string, repo: string): Promise<GitHubReadme> {
+async function fetchGitHubReadme(owner: string, repo: string, token?: string | null): Promise<GitHubReadme> {
   let res: Response;
   try {
-    res = await githubFetch(`/repos/${owner}/${repo}/readme`);
+    res = await githubFetch(`/repos/${owner}/${repo}/readme`, token);
   } catch (error) {
     if (error instanceof GitHubApiError && error.code === "not_found") {
       return { exists: false, content: "" };
@@ -111,8 +114,8 @@ async function fetchGitHubReadme(owner: string, repo: string): Promise<GitHubRea
 }
 
 /** Lightweight README fetch for autofill when the client has no imported README in memory. */
-export async function fetchRepositoryReadme(owner: string, repo: string): Promise<GitHubReadme> {
-  return fetchGitHubReadme(owner, repo);
+export async function fetchRepositoryReadme(owner: string, repo: string, token?: string | null): Promise<GitHubReadme> {
+  return fetchGitHubReadme(owner, repo, token);
 }
 
 interface RawGitTreeEntry {
@@ -125,8 +128,8 @@ interface RawGitTreeResponse {
   tree: RawGitTreeEntry[];
 }
 
-async function fetchRepositoryTree(owner: string, repo: string, branch: string): Promise<RawGitTreeEntry[]> {
-  const res = await githubFetch(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+async function fetchRepositoryTree(owner: string, repo: string, branch: string, token?: string | null): Promise<RawGitTreeEntry[]> {
+  const res = await githubFetch(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`, token);
   const data = (await res.json()) as RawGitTreeResponse;
   return data.tree.filter((entry) => entry.type === "blob");
 }
@@ -136,14 +139,35 @@ interface RawGitHubContentFile {
   encoding: string;
 }
 
-async function fetchFileContent(owner: string, repo: string, path: string, ref: string): Promise<string> {
+async function fetchFileContent(
+  owner: string,
+  repo: string,
+  path: string,
+  ref: string,
+  token?: string | null,
+): Promise<string> {
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
-  const res = await githubFetch(`/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`);
+  const res = await githubFetch(`/repos/${owner}/${repo}/contents/${encodedPath}?ref=${encodeURIComponent(ref)}`, token);
   const data = (await res.json()) as RawGitHubContentFile;
   return data.encoding === "base64" ? Buffer.from(data.content, "base64").toString("utf-8") : data.content;
 }
 
 const MAX_EVIDENCE_FILES = 30;
+const FETCH_CONCURRENCY = 8;
+
+/** Runs `fn` over `items` with a bounded number in flight, keeping result order. */
+async function mapWithConcurrency<T, R>(items: T[], fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await fn(items[i]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(FETCH_CONCURRENCY, items.length) }, worker));
+  return results;
+}
 
 /**
  * Fetches the files needed for both technology detection and setup-guide
@@ -155,22 +179,23 @@ async function fetchEvidenceFiles(
   repo: string,
   treeEntries: RawGitTreeEntry[],
   ref: string,
+  token?: string | null,
 ): Promise<Record<string, string>> {
   const candidates = treeEntries
     .filter((entry) => isTechDetectionCandidate(entry.path) || isSetupEvidenceCandidate(entry.path))
     .slice(0, MAX_EVIDENCE_FILES);
   const files: Record<string, string> = {};
 
-  for (const entry of candidates) {
+  await mapWithConcurrency(candidates, async (entry) => {
     try {
-      files[entry.path] = await fetchFileContent(owner, repo, entry.path, ref);
+      files[entry.path] = await fetchFileContent(owner, repo, entry.path, ref, token);
     } catch (error) {
       if (error instanceof GitHubApiError && error.code === "rate_limited") {
         throw error;
       }
       // Unreadable candidate file — not fatal to detection, just skip it.
     }
-  }
+  });
 
   return files;
 }
@@ -180,10 +205,16 @@ async function fetchEvidenceFiles(
  * technologies for the import preview. Server-side only. Does not save
  * anything to the database.
  */
-export async function importGitHubRepository(owner: string, repo: string): Promise<GitHubImportResult> {
-  const repository = await fetchGitHubRepository(owner, repo);
-  const readme = await fetchGitHubReadme(owner, repo);
-  const treeEntries = await fetchRepositoryTree(owner, repo, repository.defaultBranch);
+export async function importGitHubRepository(
+  owner: string,
+  repo: string,
+  token?: string | null,
+): Promise<GitHubImportResult> {
+  const repository = await fetchGitHubRepository(owner, repo, token);
+  const [readme, treeEntries] = await Promise.all([
+    fetchGitHubReadme(owner, repo, token),
+    fetchRepositoryTree(owner, repo, repository.defaultBranch, token),
+  ]);
 
   const documents: GitHubDocument[] = [];
   const skipped: GitHubSkippedDocument[] = [];
@@ -194,29 +225,30 @@ export async function importGitHubRepository(owner: string, repo: string): Promi
 
   const docCandidates = treeEntries.filter((entry) => isDocCandidate(entry.path));
 
-  for (const entry of docCandidates) {
+  const docResults = await mapWithConcurrency(docCandidates, async (entry) => {
     if (typeof entry.size === "number" && entry.size > MAX_DOC_FILE_BYTES) {
       skipped.push({ filePath: entry.path, reason: "File exceeds the 1 MB documentation size limit" });
-      continue;
+      return;
     }
 
     try {
-      const content = await fetchFileContent(owner, repo, entry.path, repository.defaultBranch);
-      documents.push({
+      const content = await fetchFileContent(owner, repo, entry.path, repository.defaultBranch, token);
+      return {
         title: generateTitle(entry.path),
         category: classifyDocument(entry.path),
         filePath: entry.path,
         content,
-      });
+      } satisfies GitHubDocument;
     } catch (error) {
       if (error instanceof GitHubApiError && error.code === "rate_limited") {
         throw error;
       }
       skipped.push({ filePath: entry.path, reason: "Could not read this file" });
     }
-  }
+  });
+  for (const doc of docResults) if (doc) documents.push(doc);
 
-  const evidenceFiles = await fetchEvidenceFiles(owner, repo, treeEntries, repository.defaultBranch);
+  const evidenceFiles = await fetchEvidenceFiles(owner, repo, treeEntries, repository.defaultBranch, token);
   const readmeContent = readme.exists ? readme.content : "";
   const technologies = detectTechnologies({ files: evidenceFiles, readmeContent });
 

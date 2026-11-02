@@ -26,6 +26,8 @@ export const AUDIT_ACTIONS = {
   "settings.branding": { label: "Changed the workspace name", category: "Settings" },
   "data.exported": { label: "Exported data", category: "Settings" },
   "owner.deleted": { label: "Removed an owner name", category: "Settings" },
+  "github.connected": { label: "Connected GitHub", category: "Settings" },
+  "github.disconnected": { label: "Disconnected GitHub", category: "Settings" },
 
   "project.created": { label: "Created a project", category: "Projects" },
   "project.updated": { label: "Edited a project", category: "Projects" },
@@ -38,6 +40,7 @@ export const AUDIT_ACTIONS = {
 
   "document.created": { label: "Created a document", category: "Documents" },
   "document.updated": { label: "Edited a document", category: "Documents" },
+  "document.uploaded": { label: "Uploaded a document file", category: "Documents" },
   "document.deleted": { label: "Deleted a document", category: "Documents" },
 } as const satisfies Record<string, { label: string; category: AuditCategory }>;
 

@@ -11,10 +11,13 @@ export function DocumentActions({
   projectId,
   documentId,
   title,
+  editable = true,
 }: {
   projectId: string;
   documentId: string;
   title: string;
+  /** False for uploaded files, which can only be removed. */
+  editable?: boolean;
 }) {
   const router = useRouter();
   const canEdit = useCan("documents", "edit");
@@ -47,7 +50,7 @@ export function DocumentActions({
   return (
     <div>
       <div className="flex gap-2">
-        {canEdit && (
+        {canEdit && editable && (
           <Button href={`/projects/${projectId}/documents/${documentId}/edit`} variant="secondary" icon={Pencil}>
             Edit
           </Button>

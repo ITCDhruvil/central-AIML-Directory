@@ -789,7 +789,8 @@ export function RichTextEditor({
 }) {
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] } }),
+      // StarterKit v3 bundles link and underline; they are registered separately below with our options.
+      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] }, link: false, underline: false }),
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,

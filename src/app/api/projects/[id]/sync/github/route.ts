@@ -4,6 +4,7 @@ import { getProjectById } from "@/lib/projects";
 import { listDocumentation } from "@/lib/documents";
 import { GitHubApiError, importGitHubRepository } from "@/lib/github/client";
 import { buildSyncPreview } from "@/lib/github/sync/preview";
+import { requireGithubToken } from "@/lib/github/requireToken";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -33,9 +34,12 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     return NextResponse.json({ error: "This project has no GitHub repository to sync." }, { status: 400 });
   }
 
+  const github = await requireGithubToken(auth.user.id);
+  if ("response" in github) return github.response;
+
   try {
     const storedDocs = await listDocumentation(project.id);
-    const incoming = await importGitHubRepository(project.githubOwner, project.githubRepo);
+    const incoming = await importGitHubRepository(project.githubOwner, project.githubRepo, github.token);
     const preview = buildSyncPreview(project, storedDocs, incoming);
     return NextResponse.json(preview);
   } catch (error) {

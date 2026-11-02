@@ -184,7 +184,7 @@ Defined in `.env.example`:
 | Variable | Required | Purpose |
 | ---------------- | -------- | ----------------------------------------------------------------|
 | `DATABASE_URL` | Yes | PostgreSQL connection string. Required for local and production. |
-| `GITHUB_TOKEN` | No | GitHub import for private repos and higher API limits. |
+| `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET` | For GitHub import | GitHub OAuth App credentials; each user connects their own account in Settings. Callback URL: `<app URL>/api/github/callback`. |
 | `CENTRAL-AI-PLATFORM_API-KEY` / `CENTRAL_AI_PLATFORM_API_KEY` | No | Enables Ask Project. The underscore name is the Vercel-friendly alias. |
 | `OPENAI_MODEL` | No | Defaults to `gpt-4o-mini`. |
 | `LANGSEARCH_API_KEY` | No | Live web search for Insights. |

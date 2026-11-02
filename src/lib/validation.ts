@@ -6,7 +6,14 @@ import {
   type ProjectStage,
 } from "@/types/project";
 import { IDEA_STATUSES, type IdeaInput } from "@/types/idea";
-import { DOCUMENT_CATEGORIES, DOCUMENT_SOURCES, type DocumentCategory, type DocumentSource } from "@/types/documentation";
+import {
+  DOCUMENT_CATEGORIES,
+  DOCUMENT_SOURCES,
+  MAX_MANUAL_DOCUMENT_CONTENT_LENGTH,
+  MAX_MANUAL_DOCUMENT_TITLE_LENGTH,
+  type DocumentCategory,
+  type DocumentSource,
+} from "@/types/documentation";
 import { CONFIDENCE_LEVELS, TECHNOLOGY_CATEGORIES, type Technology } from "@/types/technology";
 import { sha256 } from "@/lib/hash";
 import type { ChatCompletionMessage, ChatToolCall } from "@/lib/ai/chatTypes";
@@ -251,8 +258,8 @@ export function validateDocumentsInput(value: unknown): ValidatedDocument[] {
   });
 }
 
-export const MAX_MANUAL_DOCUMENT_TITLE_LENGTH = 200;
-export const MAX_MANUAL_DOCUMENT_CONTENT_LENGTH = 200_000; // ~200KB — generous for hand-written Markdown notes
+// Defined in types/documentation so client code (file upload) can share them without pulling in this module's server-only imports.
+export { MAX_MANUAL_DOCUMENT_TITLE_LENGTH, MAX_MANUAL_DOCUMENT_CONTENT_LENGTH };
 
 export interface ManualDocumentInput {
   title: string;

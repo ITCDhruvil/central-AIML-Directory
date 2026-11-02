@@ -18,6 +18,7 @@ import { AuditLog } from "@/components/settings/AuditLog";
 import { AppearanceSettings } from "@/components/settings/AppearanceSettings";
 import { EmailDomainSetting } from "@/components/settings/EmailDomainSetting";
 import { GeneralSettings } from "@/components/settings/GeneralSettings";
+import { GithubConnectionSettings } from "@/components/settings/GithubConnectionSettings";
 import { SecurityPolicySettings } from "@/components/settings/SecurityPolicySettings";
 import { ProfileSettings } from "@/components/settings/ProfileSettings";
 import { SecuritySettings } from "@/components/settings/SecuritySettings";
@@ -86,11 +87,14 @@ export function SettingsView({
 
       <div key={tab} className="view-fade min-w-0">
         {tab === "profile" && (
-          <ProfileSettings
-            user={user}
-            createdAt={createdAt}
-            lastLoginAt={lastLoginAt}
-          />
+          <div className="space-y-6">
+            <ProfileSettings
+              user={user}
+              createdAt={createdAt}
+              lastLoginAt={lastLoginAt}
+            />
+            <GithubConnectionSettings />
+          </div>
         )}
         {tab === "security" && <SecuritySettings />}
         {tab === "appearance" && <AppearanceSettings />}

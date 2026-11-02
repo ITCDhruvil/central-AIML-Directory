@@ -41,6 +41,7 @@ import { ProjectDetailTabs } from "@/components/ProjectDetailTabs";
 import { DismissibleInternalHint } from "@/components/DismissibleInternalHint";
 import { SuggestImprovementsPanel } from "@/components/SuggestImprovementsPanel";
 import { SyncGitHubPanel } from "@/components/SyncGitHubPanel";
+import { DocumentationPanel } from "@/components/DocumentationPanel";
 import { ProjectAssistant } from "@/components/ProjectAssistant";
 import { ProjectDetailsEditor } from "@/components/ProjectDetailsEditor";
 import { ProjectTeam } from "@/components/ProjectTeam";
@@ -49,8 +50,6 @@ import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
 import { Breadcrumb1 } from "@/components/ui/breadcrumb-01";
 import { EmptyState } from "@/components/EmptyState";
-import { documentSourceLabel } from "@/lib/documentOwnership";
-import type { Documentation } from "@/types/documentation";
 import type { ProjectActivity } from "@/types/project";
 
 const DETAIL_ROW = "grid grid-cols-1 gap-2 py-3 sm:grid-cols-[11rem_minmax(0,1fr)] sm:items-center sm:gap-x-4";
@@ -90,25 +89,6 @@ function SectionCard({
       </div>
       <div className="mt-3">{children}</div>
     </div>
-  );
-}
-
-function DocumentLink({ projectId, doc }: { projectId: string; doc: Documentation }) {
-  return (
-    <Button
-      href={`/projects/${projectId}/documents/${doc.id}`}
-      variant="ghost"
-      size="sm"
-      className="w-full !justify-between font-normal"
-    >
-      <span className="flex items-center gap-2 text-sm text-zinc-800 dark:text-zinc-200">
-        <FileText size={14} className="shrink-0 text-zinc-400" />
-        {doc.title}
-      </span>
-      <span className="text-xs text-zinc-400">
-        {doc.category} · {documentSourceLabel(doc.source)}
-      </span>
-    </Button>
   );
 }
 
@@ -183,9 +163,6 @@ export default async function ProjectDetailPage({
     listRecentProjectActivities(project.id, 200),
   ]);
   const attentionIssues = getNeedsAttentionIssues(project);
-  const repoDocuments = documents.filter((doc) => doc.source === "github");
-  const generatedDocuments = documents.filter((doc) => doc.source === "generated");
-  const manualDocuments = documents.filter((doc) => doc.source === "manual");
   const isGithubConnected = Boolean(project.githubUrl && project.githubOwner && project.githubRepo);
 
   const readmeDoc = documents.find((d) => d.category === "README");
@@ -286,66 +263,18 @@ export default async function ProjectDetailPage({
   );
 
   const documentationPanel = (
-    <SectionCard
-      icon={FileText}
-      title={`Documentation — ${documents.length} document${documents.length === 1 ? "" : "s"}`}
-      action={
-        canCreateDocument ? (
-          <Button href={`/projects/${project.id}/documents/new`} variant="ghost" size="sm" icon={Plus}>
-            Add Documentation
-          </Button>
-        ) : undefined
-      }
-    >
-      {documents.length === 0 ? (
-        <EmptyState
-          icon={FileText}
-          title="No documentation yet"
-          description={canCreateDocument ? "Import from GitHub, or add one manually." : "Nothing has been documented here yet."}
-          actionHref={canCreateDocument ? `/projects/${project.id}/documents/new` : undefined}
-          actionLabel={canCreateDocument ? "Add Documentation" : undefined}
-        />
-      ) : (
-        <div className="space-y-4">
-          {repoDocuments.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Repository</p>
-              <ul className="mt-1 space-y-0.5">
-                {repoDocuments.map((doc) => (
-                  <li key={doc.id}>
-                    <DocumentLink projectId={project.id} doc={doc} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {generatedDocuments.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Generated</p>
-              <ul className="mt-1 space-y-0.5">
-                {generatedDocuments.map((doc) => (
-                  <li key={doc.id}>
-                    <DocumentLink projectId={project.id} doc={doc} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {manualDocuments.length > 0 && (
-            <div>
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Manual</p>
-              <ul className="mt-1 space-y-0.5">
-                {manualDocuments.map((doc) => (
-                  <li key={doc.id}>
-                    <DocumentLink projectId={project.id} doc={doc} />
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </SectionCard>
+    <DocumentationPanel
+      projectId={project.id}
+      canCreate={canCreateDocument}
+      // Only what the list shows: full document text would be sent to the browser for nothing.
+      documents={documents.map((doc) => ({
+        id: doc.id,
+        title: doc.title,
+        category: doc.category,
+        source: doc.source,
+        file: doc.file ?? null,
+      }))}
+    />
   );
 
   const askAiPanel = canUseAssistant ? (

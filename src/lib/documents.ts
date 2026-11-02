@@ -31,6 +31,8 @@ export function buildDocumentationWhere(filters: DocumentationFilters) {
 export async function listDocumentation(projectId: string, access: AccessScope = ALL_ACCESS): Promise<Documentation[]> {
   const rows = await prisma.documentation.findMany({
     where: andWhere({ projectId }, documentScopeWhere(access)),
+    // Name/size/type only — the file's bytes stay in the database until someone downloads them.
+    include: { file: { select: { fileName: true, size: true, contentType: true } } },
     orderBy: { createdAt: "asc" },
   });
   return rows.map(toDocumentation);
@@ -61,6 +63,7 @@ export async function getDocumentationById(
 ): Promise<Documentation | null> {
   const row = await prisma.documentation.findFirst({
     where: andWhere({ id: documentId, projectId }, documentScopeWhere(access)),
+    include: { file: { select: { fileName: true, size: true, contentType: true } } },
   });
   return row ? toDocumentation(row) : null;
 }

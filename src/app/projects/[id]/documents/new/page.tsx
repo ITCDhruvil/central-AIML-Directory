@@ -18,7 +18,7 @@ export default async function NewDocumentPage({
   }
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl space-y-6">
       <div>
         <Link
           href={`/projects/${id}`}

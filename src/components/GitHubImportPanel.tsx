@@ -4,15 +4,18 @@ import { useState } from "react";
 import type { GitHubImportResult } from "@/types/github";
 import { Button } from "@/components/ui/Button";
 import { GithubIcon } from "@/components/icons/GithubIcon";
+import { GitHubConnectPrompt } from "@/components/GitHubConnectPrompt";
 
 export function GitHubImportPanel({ onImported }: { onImported: (result: GitHubImportResult) => void }) {
   const [url, setUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsConnect, setNeedsConnect] = useState(false);
 
   async function handleImport() {
     setLoading(true);
     setError(null);
+    setNeedsConnect(false);
 
     try {
       const res = await fetch("/api/projects/import/github", {
@@ -23,6 +26,10 @@ export function GitHubImportPanel({ onImported }: { onImported: (result: GitHubI
       const body = await res.json().catch(() => ({}));
 
       if (!res.ok) {
+        if (body.code === "github_not_connected") {
+          setNeedsConnect(true);
+          return;
+        }
         setError(body.error ?? "Failed to import repository");
         return;
       }
@@ -52,6 +59,7 @@ export function GitHubImportPanel({ onImported }: { onImported: (result: GitHubI
         </Button>
       </div>
       {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
+      {needsConnect && <GitHubConnectPrompt returnTo="/projects/new" />}
       <p className="mt-2 text-xs text-zinc-400">Or skip this and fill in the project details manually below.</p>
     </div>
   );

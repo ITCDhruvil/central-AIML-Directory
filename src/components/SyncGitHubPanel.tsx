@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/Button";
+import { GitHubConnectPrompt } from "@/components/GitHubConnectPrompt";
 import type { SyncPreview } from "@/lib/github/sync/types";
 
 function formatDateTime(iso: string): string {
@@ -48,6 +49,7 @@ export function SyncGitHubPanel({
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsConnect, setNeedsConnect] = useState(false);
 
   const [applyRepository, setApplyRepository] = useState(true);
   const [applyReadme, setApplyReadme] = useState(true);
@@ -58,10 +60,15 @@ export function SyncGitHubPanel({
   async function startSync() {
     setLoading(true);
     setError(null);
+    setNeedsConnect(false);
     try {
       const res = await fetch(`/api/projects/${projectId}/sync/github`, { method: "POST" });
       const body = await res.json();
       if (!res.ok) {
+        if (body.code === "github_not_connected") {
+          setNeedsConnect(true);
+          return;
+        }
         setError(body.error ?? "Failed to sync with GitHub");
         return;
       }
@@ -147,6 +154,7 @@ export function SyncGitHubPanel({
       </div>
 
       {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+      {needsConnect && <GitHubConnectPrompt returnTo={`/projects/${projectId}`} />}
 
       {preview && !hasAnyChanges(preview) && (
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">

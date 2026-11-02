@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { documentSourceLabel, isDeletableDocument, isEditableDocument } from "@/lib/documentOwnership";
+import { documentCategoryLabel, documentSourceLabel, isDeletableDocument, isEditableDocument } from "@/lib/documentOwnership";
 
 test("only manual documents are editable", () => {
   assert.equal(isEditableDocument("manual"), true);
@@ -22,4 +22,18 @@ test("documentSourceLabel returns human-friendly labels, never the raw source st
 
 test("documentSourceLabel falls back gracefully for an unknown source", () => {
   assert.equal(documentSourceLabel("something-else"), "something-else");
+});
+
+test("uploaded files can be deleted but never edited", () => {
+  assert.equal(isDeletableDocument("upload"), true);
+  assert.equal(isEditableDocument("upload"), false);
+  assert.equal(documentSourceLabel("upload"), "Uploaded");
+});
+
+test("category labels read naturally and keep acronyms", () => {
+  assert.equal(documentCategoryLabel("README"), "README");
+  assert.equal(documentCategoryLabel("PRD"), "PRD");
+  assert.equal(documentCategoryLabel("SETUP"), "Setup");
+  assert.equal(documentCategoryLabel("AI_RULES"), "AI rules");
+  assert.equal(documentCategoryLabel("NOTES"), "Notes");
 });

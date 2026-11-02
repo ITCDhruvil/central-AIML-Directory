@@ -2,6 +2,7 @@ import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { GitHubApiError, importGitHubRepository } from "@/lib/github/client";
 import { parseGitHubRepoUrl } from "@/lib/github/parseUrl";
+import { requireGithubToken } from "@/lib/github/requireToken";
 
 function extractGithubUrl(body: unknown): string | null {
   if (typeof body !== "object" || body === null) return null;
@@ -35,8 +36,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Enter a valid GitHub repository URL." }, { status: 400 });
   }
 
+  const github = await requireGithubToken(auth.user.id);
+  if ("response" in github) return github.response;
+
   try {
-    const result = await importGitHubRepository(parsed.owner, parsed.repo);
+    const result = await importGitHubRepository(parsed.owner, parsed.repo, github.token);
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof GitHubApiError) {
