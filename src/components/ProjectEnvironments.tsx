@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Activity,
   CalendarClock,
@@ -28,12 +28,15 @@ import {
   Rocket,
   Server,
   ShieldAlert,
+  ShieldCheck,
   Trash2,
+  User,
   X,
 } from "lucide-react";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
+import { Dropdown, type DropdownOption } from "@/components/ui/Dropdown";
 import { formatRelativeTime } from "@/lib/formatRelativeTime";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
@@ -312,16 +315,40 @@ function LinkForm({
 // Test accounts
 // ---------------------------------------------------------------------------------------------------------------
 
+const CUSTOM_ROLE = "__custom__";
+const BASE_ROLES = ["Admin", "Non-admin"];
+
 function CredentialForm({
   initial,
+  knownPurposes,
   onSave,
   onCancel,
 }: {
   initial?: EnvironmentCredentialView;
+  /** Roles already used by test users elsewhere in this project, offered again so they only have to be typed once. */
+  knownPurposes: string[];
   onSave: (body: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
 }) {
   const [purpose, setPurpose] = useState(initial?.purpose ?? "");
+
+  // Admin and Non-admin first, then any custom roles already in use (case-insensitive, listed once).
+  const roles = useMemo(() => {
+    const seen = new Set<string>();
+    return [...BASE_ROLES, ...knownPurposes].filter((r) => {
+      const key = r.trim().toLowerCase();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  }, [knownPurposes]);
+  const matchedRole = roles.find((r) => r.toLowerCase() === purpose.trim().toLowerCase());
+  // A role that isn't in the list (or "Custom…" being chosen) shows a text box for typing it.
+  const [custom, setCustom] = useState(Boolean(initial?.purpose) && !roles.some((r) => r.toLowerCase() === initial?.purpose.trim().toLowerCase()));
+  const roleOptions: DropdownOption[] = [
+    ...roles.map((r) => ({ value: r, label: r, icon: r === "Admin" ? ShieldCheck : User })),
+    { value: CUSTOM_ROLE, label: "Custom…", icon: Plus },
+  ];
   const [username, setUsername] = useState(initial?.username ?? "");
   const [password, setPassword] = useState("");
   const [notes, setNotes] = useState(initial?.notes ?? "");
@@ -347,7 +374,32 @@ function CredentialForm({
     <form onSubmit={submit} autoComplete="off" className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Label text="Role or purpose">
-          <input className="field w-full" placeholder="e.g. admin, non-admin" value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={80} autoFocus />
+          <Dropdown
+            value={custom ? CUSTOM_ROLE : (matchedRole ?? "")}
+            options={roleOptions}
+            placeholder="Select a role"
+            aria-label="Role or purpose"
+            className="w-full"
+            onChange={(value) => {
+              if (value === CUSTOM_ROLE) {
+                setCustom(true);
+                setPurpose("");
+              } else {
+                setCustom(false);
+                setPurpose(value);
+              }
+            }}
+          />
+          {custom && (
+            <input
+              className="field mt-2 w-full"
+              placeholder="Custom role, e.g. tester"
+              value={purpose}
+              onChange={(e) => setPurpose(e.target.value)}
+              maxLength={80}
+              autoFocus
+            />
+          )}
         </Label>
         <Label text="Username">
           <input className="field w-full" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
@@ -657,6 +709,7 @@ function EnvironmentCard({
   isFirst,
   isLast,
   takenNames,
+  knownPurposes,
   defaultOpen,
   run,
   onMove,
@@ -667,6 +720,7 @@ function EnvironmentCard({
   isFirst: boolean;
   isLast: boolean;
   takenNames: string[];
+  knownPurposes: string[];
   defaultOpen: boolean;
   run: (fn: () => Promise<ApiResult>) => Promise<void>;
   onMove: (direction: -1 | 1) => void;
@@ -951,6 +1005,7 @@ function EnvironmentCard({
                     <li key={c.id}>
                       <CredentialForm
                         initial={c}
+                        knownPurposes={knownPurposes}
                         onCancel={() => setEditing(null)}
                         onSave={async (body) => {
                           await run(() => call("PUT", `${base}/credentials/${c.id}`, body));
@@ -967,6 +1022,7 @@ function EnvironmentCard({
             {editing === "newCred" && (
               <div className="mt-3">
                 <CredentialForm
+                  knownPurposes={knownPurposes}
                   onCancel={() => setEditing(null)}
                   onSave={async (body) => {
                     await run(() => call("POST", `${base}/credentials`, body));
@@ -1061,6 +1117,7 @@ export function ProjectEnvironments({
   }
 
   const takenNames = envs.map((e) => e.name);
+  const knownPurposes = envs.flatMap((e) => e.credentials.map((c) => c.purpose));
 
   return (
     <div className="space-y-4">
@@ -1132,6 +1189,7 @@ export function ProjectEnvironments({
             isFirst={i === 0}
             isLast={i === envs.length - 1}
             takenNames={takenNames}
+            knownPurposes={knownPurposes}
             defaultOpen={false}
             run={run}
             onMove={(d) => move(i, d)}
