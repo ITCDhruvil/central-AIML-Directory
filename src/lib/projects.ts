@@ -149,6 +149,16 @@ export async function createProject(rawInput: unknown, documents: ValidatedDocum
 }
 
 /**
+ * A technology sent as a plain name (the chatbot does this) keeps the category the project already has for it, so
+ * re-sending the list never throws away categories. New names are categorised later, by name.
+ */
+function keepKnownCategories(incoming: unknown, existing: Project["technologies"]): unknown {
+  if (!Array.isArray(incoming)) return incoming;
+  const known = new Map(existing.map((t) => [t.name.toLowerCase(), t]));
+  return incoming.map((item) => (typeof item === "string" ? (known.get(item.trim().toLowerCase()) ?? item) : item));
+}
+
+/**
  * Partially updates a project: any field omitted from `patch` keeps its current
  * value. Internally merges onto the existing project and re-validates the
  * whole thing (same rules as a full PUT), so a partial `{ status: "ARCHIVED" }`
@@ -178,7 +188,7 @@ export async function updateProjectFields(
     githubOwner: patchObj.githubOwner !== undefined ? patchObj.githubOwner : existing.githubOwner,
     githubRepo: patchObj.githubRepo !== undefined ? patchObj.githubRepo : existing.githubRepo,
     defaultBranch: patchObj.defaultBranch !== undefined ? patchObj.defaultBranch : existing.defaultBranch,
-    technologies: patchObj.technologies !== undefined ? patchObj.technologies : existing.technologies,
+    technologies: patchObj.technologies !== undefined ? keepKnownCategories(patchObj.technologies, existing.technologies) : existing.technologies,
     tags: patchObj.tags !== undefined ? patchObj.tags : existing.tags,
     deploymentUrls: patchObj.deploymentUrls !== undefined ? patchObj.deploymentUrls : existing.deploymentUrls,
   };

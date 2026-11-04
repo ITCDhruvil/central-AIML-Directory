@@ -158,6 +158,7 @@ function compactProject(project: Project) {
     owner: project.owner,
     tags: project.tags,
     technologies: project.technologies.map((t) => t.name),
+    technologyCategories: Object.fromEntries(project.technologies.map((t) => [t.name, t.category])),
     githubUrl: project.githubUrl,
     githubRepo: project.githubRepo,
     deploymentUrls: project.deploymentUrls,

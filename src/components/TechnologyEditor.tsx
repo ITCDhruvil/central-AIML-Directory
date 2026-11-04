@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { inferTechnologyCategory } from "@/lib/technologyCatalog";
 import { Plus, X } from "lucide-react";
 import type { Technology } from "@/types/technology";
 import { Button } from "@/components/ui/Button";
@@ -24,7 +25,7 @@ export function TechnologyEditor({
       setDraft("");
       return;
     }
-    onChange([...value, { name, category: "OTHER", evidence: ["manual"], confidence: "HIGH" }]);
+    onChange([...value, { name, category: inferTechnologyCategory(name), evidence: ["manual"], confidence: "HIGH" }]);
     setDraft("");
   }
 

@@ -14,6 +14,7 @@ import {
   type DocumentCategory,
   type DocumentSource,
 } from "@/types/documentation";
+import { inferTechnologyCategory } from "@/lib/technologyCatalog";
 import { CONFIDENCE_LEVELS, TECHNOLOGY_CATEGORIES, type Technology } from "@/types/technology";
 import { sha256 } from "@/lib/hash";
 import type { ChatCompletionMessage, ChatToolCall } from "@/lib/ai/chatTypes";
@@ -142,7 +143,7 @@ export function normalizeTechnologiesInput(value: unknown): Technology[] {
 
     if (typeof item === "string") {
       const name = item.trim();
-      if (name) candidate = { name, category: "OTHER", evidence: [], confidence: "MEDIUM" };
+      if (name) candidate = { name, category: inferTechnologyCategory(name), evidence: [], confidence: "MEDIUM" };
     } else if (typeof item === "object" && item !== null) {
       const obj = item as Record<string, unknown>;
       const name = typeof obj.name === "string" ? obj.name.trim() : "";

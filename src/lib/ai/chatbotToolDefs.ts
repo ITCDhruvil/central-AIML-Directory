@@ -5,6 +5,26 @@ import { DOCUMENT_CATEGORIES } from "@/types/documentation";
 import { IDEA_STATUSES } from "@/types/idea";
 import { INSIGHT_TYPES } from "@/types/insight";
 import { PROJECT_STAGES, PROJECT_STATUSES, PROJECT_TYPES } from "@/types/project";
+import { TECHNOLOGY_CATEGORIES } from "@/types/technology";
+
+const TECHNOLOGIES_SCHEMA = {
+  type: "array",
+  items: {
+    anyOf: [
+      { type: "string" },
+      {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          category: { type: "string", enum: [...TECHNOLOGY_CATEGORIES] },
+        },
+        required: ["name"],
+      },
+    ],
+  },
+  description:
+    "The project's full technology list. Each item is a technology name, e.g. \"React\", or {name, category} to set its category. Use the plain name only (never put the category in the name, e.g. \"Python\", not \"Python (Language)\"). Categories: LANGUAGE, FRAMEWORK, LIBRARY, DATABASE, CLOUD, AI_ML, TOOL, RUNTIME, OTHER. Well-known names are categorised automatically.",
+} as const;
 
 const PROJECT_FIELD_PROPERTIES = {
   description: { type: "string", description: "Markdown description" },
@@ -14,7 +34,7 @@ const PROJECT_FIELD_PROPERTIES = {
   owner: { type: "string" },
   githubUrl: { type: "string" },
   tags: { type: "array", items: { type: "string" } },
-  technologies: { type: "array", items: { type: "string" }, description: "Technology names, e.g. [\"React\", \"Python\"]" },
+  technologies: TECHNOLOGIES_SCHEMA,
   deploymentUrls: { type: "array", items: { type: "string" } },
 } as const;
 
