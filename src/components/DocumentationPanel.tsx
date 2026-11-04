@@ -3,10 +3,35 @@
 import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, CheckSquare, ChevronsUpDown, Download, Eye, FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowDownAZ,
+  ArrowDownWideNarrow,
+  ArrowUp,
+  ArrowUpAZ,
+  ArrowUpNarrowWide,
+  ArrowUpDown,
+  CalendarPlus,
+  CheckSquare,
+  ChevronsUpDown,
+  Download,
+  Eye,
+  FileText,
+  FileType,
+  FolderGit2,
+  History,
+  Layers,
+  Pencil,
+  Plus,
+  Sparkles,
+  Trash2,
+  Upload,
+  X,
+  type LucideIcon,
+} from "lucide-react";
 import { useCan } from "@/components/AuthProvider";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { FileTypeTile } from "@/components/FileTypeTile";
+import { FileTypeTile, KIND_ICON } from "@/components/FileTypeTile";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/Button";
 import { FilterMenu, type FilterOption, type FilterSection } from "@/components/ui/FilterMenu";
@@ -33,10 +58,10 @@ export interface DocumentRow {
 const PAGE_SIZE = 10;
 
 const SOURCE_OPTIONS: FilterOption[] = [
-  { value: "github", label: "Repository" },
-  { value: "generated", label: "Generated" },
-  { value: "manual", label: "Written" },
-  { value: UPLOAD_SOURCE, label: "Uploaded" },
+  { value: "github", label: "Repository", icon: FolderGit2 },
+  { value: "generated", label: "Generated", icon: Sparkles },
+  { value: "manual", label: "Written", icon: Pencil },
+  { value: UPLOAD_SOURCE, label: "Uploaded", icon: Upload },
 ];
 
 const KIND_LABEL: Record<FileKind, string> = {
@@ -77,14 +102,14 @@ function SortHead({ id, label, sort, onToggle }: { id: SortKey; label: string; s
   );
 }
 
-const SORT_PRESETS: { value: string; label: string; sort: Sort }[] = [
-  { value: "", label: "Default order", sort: null },
-  { value: "date-desc", label: "Newest first", sort: { key: "date", dir: "desc" } },
-  { value: "date-asc", label: "Oldest first", sort: { key: "date", dir: "asc" } },
-  { value: "name-asc", label: "Name A–Z", sort: { key: "name", dir: "asc" } },
-  { value: "name-desc", label: "Name Z–A", sort: { key: "name", dir: "desc" } },
-  { value: "size-desc", label: "Largest first", sort: { key: "size", dir: "desc" } },
-  { value: "size-asc", label: "Smallest first", sort: { key: "size", dir: "asc" } },
+const SORT_PRESETS: { value: string; label: string; icon: LucideIcon; sort: Sort }[] = [
+  { value: "", label: "Default order", icon: Layers, sort: null },
+  { value: "date-desc", label: "Newest first", icon: CalendarPlus, sort: { key: "date", dir: "desc" } },
+  { value: "date-asc", label: "Oldest first", icon: History, sort: { key: "date", dir: "asc" } },
+  { value: "name-asc", label: "Name A–Z", icon: ArrowDownAZ, sort: { key: "name", dir: "asc" } },
+  { value: "name-desc", label: "Name Z–A", icon: ArrowUpAZ, sort: { key: "name", dir: "desc" } },
+  { value: "size-desc", label: "Largest first", icon: ArrowDownWideNarrow, sort: { key: "size", dir: "desc" } },
+  { value: "size-asc", label: "Smallest first", icon: ArrowUpNarrowWide, sort: { key: "size", dir: "asc" } },
 ];
 
 function sortToPreset(sort: Sort): string {
@@ -140,7 +165,7 @@ export function DocumentationPanel({
   // Only the types and sources that actually occur are offered as filters.
   const kindOptions: FilterOption[] = useMemo(() => {
     const present = new Set(documents.map(kindOf));
-    return (Object.keys(KIND_LABEL) as FileKind[]).filter((k) => present.has(k)).map((k) => ({ value: k, label: KIND_LABEL[k] }));
+    return (Object.keys(KIND_LABEL) as FileKind[]).filter((k) => present.has(k)).map((k) => ({ value: k, label: KIND_LABEL[k], icon: KIND_ICON[k] }));
   }, [documents]);
   const sourceOptions = SOURCE_OPTIONS.filter((o) => documents.some((d) => d.source === o.value));
 
@@ -260,16 +285,17 @@ export function DocumentationPanel({
 
   const filterSections: FilterSection[] = [
     ...(kindOptions.length > 1
-      ? [{ id: "type", label: "Type", kind: "multi" as const, options: kindOptions, selected: kinds, onChange: (v: string[]) => { setKinds(v); setPage(1); }, allLabel: "All types" }]
+      ? [{ id: "type", label: "Type", icon: FileType, kind: "multi" as const, options: kindOptions, selected: kinds, onChange: (v: string[]) => { setKinds(v); setPage(1); }, allLabel: "All types" }]
       : []),
     ...(sourceOptions.length > 1
-      ? [{ id: "source", label: "Source", kind: "multi" as const, options: sourceOptions, selected: sources, onChange: (v: string[]) => { setSources(v); setPage(1); }, allLabel: "All sources" }]
+      ? [{ id: "source", label: "Source", icon: FolderGit2, kind: "multi" as const, options: sourceOptions, selected: sources, onChange: (v: string[]) => { setSources(v); setPage(1); }, allLabel: "All sources" }]
       : []),
     {
       id: "sort",
       label: "Sort by",
+      icon: ArrowUpDown,
       kind: "single",
-      options: SORT_PRESETS.map((p) => ({ value: p.value, label: p.label })),
+      options: SORT_PRESETS.map((p) => ({ value: p.value, label: p.label, icon: p.icon })),
       selected: sortToPreset(sort),
       onChange: (v: string) => setSort(SORT_PRESETS.find((p) => p.value === v)?.sort ?? null),
       fallbackLabel: "Custom",

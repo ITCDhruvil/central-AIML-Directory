@@ -92,7 +92,7 @@ function Cell({
     case "name":
       return (
         <div className="flex min-w-0 items-center gap-3.5">
-          <ProjectTypeIcon name={project.name} description={project.description} technologies={project.technologies} size={46} />
+          <ProjectTypeIcon name={project.name} description={project.description} technologies={project.technologies} size={46} chrome="glyph" />
           <div className="min-w-0">
             <Link
               href={`/projects/${project.id}`}
@@ -278,6 +278,7 @@ export function ProjectTable({
   onSort,
   onEditTable,
   onProjectUpdated,
+  startIndex = 0,
 }: {
   projects: Project[];
   columns: ColumnId[];
@@ -286,6 +287,8 @@ export function ProjectTable({
   onEditTable: () => void;
   /** Called with the saved project when a blank cell is filled in, so the row updates without a reload. */
   onProjectUpdated: (updated: Project) => void;
+  /** Number of rows on earlier pages, so row numbers keep counting across pages. */
+  startIndex?: number;
 }) {
   const ownerSuggestions = ownerOptions(projects);
   // Project column gets more room; the rest share evenly. The last track holds the row menu.
@@ -295,7 +298,7 @@ export function ProjectTable({
     tags: "minmax(160px,1.4fr)",
     owner: "minmax(140px,1.2fr)",
   };
-  const template = columns.map((c) => WIDTHS[c] ?? "minmax(110px,1fr)").join(" ") + " 44px";
+  const template = "2rem " + columns.map((c) => WIDTHS[c] ?? "minmax(110px,1fr)").join(" ") + " 44px";
 
   return (
     // Horizontal scroll only on small screens, so row menus on md+ aren't clipped by the scroll box.
@@ -306,6 +309,9 @@ export function ProjectTable({
           className="grid items-center gap-x-4 border-b border-zinc-100 px-5 py-2.5 dark:border-zinc-800"
           style={{ gridTemplateColumns: template }}
         >
+          <div role="columnheader" aria-label="Row number" className="text-xs font-semibold text-zinc-400">
+            #
+          </div>
           {columns.map((column) => (
             <div
               key={column}
@@ -321,13 +327,16 @@ export function ProjectTable({
         </div>
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
-          {projects.map((project) => (
+          {projects.map((project, index) => (
             <div
               key={project.id}
               role="row"
               className="grid items-center gap-x-4 px-5 py-4 text-sm transition-colors hover:bg-zinc-50/70 dark:hover:bg-zinc-800/40"
               style={{ gridTemplateColumns: template }}
             >
+              <div role="cell" className="text-xs tabular-nums text-zinc-400">
+                {startIndex + index + 1}
+              </div>
               {columns.map((column) => (
                 <div key={column} role="cell" className="min-w-0">
                   <Cell project={project} column={column} ownerSuggestions={ownerSuggestions} onProjectUpdated={onProjectUpdated} />

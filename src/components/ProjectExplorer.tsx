@@ -3,7 +3,24 @@
 import { useAuthUser, useCan } from "@/components/AuthProvider";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertCircle, LayoutGrid, List, Plus, SearchX, X } from "lucide-react";
+import {
+  AlertCircle,
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ArrowUpDown,
+  CalendarPlus,
+  CircleDot,
+  Clock,
+  LayoutGrid,
+  List,
+  Plus,
+  RefreshCw,
+  SearchX,
+  Tag,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 import { ProjectCard } from "@/components/ProjectCard";
 import { EditTableModal } from "@/components/EditTableModal";
 import { ProjectTable } from "@/components/ProjectTable";
@@ -39,7 +56,14 @@ type ViewMode = "grid" | "list";
 
 const TYPE_OPTIONS = PROJECT_TYPES.map((t) => ({ value: t, label: t, icon: TYPE_ICONS[t].icon, iconClassName: TYPE_ICONS[t].className }));
 const STATUS_OPTIONS = PROJECT_STATUSES.map((s) => ({ value: s, label: s, icon: STATUS_ICONS[s].icon, iconClassName: STATUS_ICONS[s].className }));
-const SORT_DROPDOWN_OPTIONS = SORT_OPTIONS.map((o) => ({ value: o, label: SORT_LABELS[o] }));
+const SORT_ICONS = {
+  "updated-desc": Clock,
+  "created-desc": CalendarPlus,
+  "name-asc": ArrowDownAZ,
+  "name-desc": ArrowUpAZ,
+  "last-synced": RefreshCw,
+} as const;
+const SORT_DROPDOWN_OPTIONS = SORT_OPTIONS.map((o) => ({ value: o, label: SORT_LABELS[o], icon: SORT_ICONS[o] }));
 
 function ErrorPanel({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
@@ -264,9 +288,9 @@ export function ProjectExplorer({
       names.push(ownerFilter);
     }
     return [
-      ...(myOwnerNames.length > 0 ? [{ value: "me", label: "My projects" }] : []),
-      { value: "", label: "All projects" },
-      ...names.map((name) => ({ value: name, label: name })),
+      ...(myOwnerNames.length > 0 ? [{ value: "me", label: "My projects", icon: User }] : []),
+      { value: "", label: "All projects", icon: Users },
+      ...names.map((name) => ({ value: name, label: name, avatarName: name })),
     ];
   }, [projects, ownerFilter, myOwnerNames]);
 
@@ -281,12 +305,13 @@ export function ProjectExplorer({
   const hasActiveFilters = Boolean(type.length || status.length || githubConnectedOnly || ownerFilter);
 
   const filterSections: FilterSection[] = [
-    { id: "type", label: "Type", kind: "multi", options: TYPE_OPTIONS, selected: type, onChange: (v) => { setType(v); setPage(1); dropSeedParams(); }, allLabel: "All types" },
-    { id: "status", label: "Status", kind: "multi", options: STATUS_OPTIONS, selected: status, onChange: (v) => { setStatus(v); setPage(1); dropSeedParams(); }, allLabel: "All statuses" },
-    { id: "owner", label: "Owner", kind: "single", options: ownerDropdownOptions, selected: ownerFilter, onChange: (v) => { setOwnerFilter(v); setPage(1); dropSeedParams(); } },
+    { id: "type", label: "Type", icon: Tag, kind: "multi", options: TYPE_OPTIONS, selected: type, onChange: (v) => { setType(v); setPage(1); dropSeedParams(); }, allLabel: "All types" },
+    { id: "status", label: "Status", icon: CircleDot, kind: "multi", options: STATUS_OPTIONS, selected: status, onChange: (v) => { setStatus(v); setPage(1); dropSeedParams(); }, allLabel: "All statuses" },
+    { id: "owner", label: "Owner", icon: User, kind: "single", options: ownerDropdownOptions, selected: ownerFilter, onChange: (v) => { setOwnerFilter(v); setPage(1); dropSeedParams(); } },
     {
       id: "sort",
       label: "Sort by",
+      icon: ArrowUpDown,
       kind: "single",
       options: SORT_DROPDOWN_OPTIONS,
       selected: sortToPreset(sort) ?? "",
@@ -475,6 +500,7 @@ export function ProjectExplorer({
           sort={sort}
           onSort={sortByColumn}
           onEditTable={() => setEditingTable(true)}
+          startIndex={isPage ? (page - 1) * 10 : 0}
           onProjectUpdated={(updated) =>
             setProjects((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated, team: p.team } : p)))
           }

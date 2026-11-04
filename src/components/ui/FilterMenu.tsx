@@ -2,16 +2,26 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronRight, SlidersHorizontal, X, type LucideIcon } from "lucide-react";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import { cn } from "@/lib/cn";
 import { useClickOutside } from "@/lib/useClickOutside";
 
-export type FilterOption = { value: string; label: string; icon?: LucideIcon; iconClassName?: string };
+export type FilterOption = {
+  value: string;
+  label: string;
+  icon?: LucideIcon;
+  iconClassName?: string;
+  /** A person's name: shows their profile picture (or initials) in front of the label instead of an icon. */
+  avatarName?: string;
+};
 
 export type FilterSection =
   | {
       id: string;
       label: string;
       kind: "multi";
+      /** Shown in front of the filter's name in the menu. */
+      icon?: LucideIcon;
       options: FilterOption[];
       selected: string[];
       onChange: (next: string[]) => void;
@@ -22,6 +32,7 @@ export type FilterSection =
       id: string;
       label: string;
       kind: "single";
+      icon?: LucideIcon;
       options: FilterOption[];
       selected: string;
       onChange: (next: string) => void;
@@ -86,7 +97,11 @@ function OptionRow({
           {checked && <Check size={11} strokeWidth={3} />}
         </span>
       )}
-      {Icon && <Icon size={14} className={cn("shrink-0", option.iconClassName ?? "text-zinc-400")} />}
+      {option.avatarName ? (
+        <PersonAvatar name={option.avatarName} size={20} />
+      ) : (
+        Icon && <Icon size={14} className={cn("shrink-0", option.iconClassName ?? "text-zinc-400")} />
+      )}
       <span className="min-w-0 flex-1 truncate">{option.label}</span>
       {!box && checked && <Check size={15} className="shrink-0 text-orange-600" />}
     </button>
@@ -250,6 +265,7 @@ export function FilterMenu({
                       isActive ? "bg-zinc-100 dark:bg-zinc-800" : "hover:bg-zinc-50 dark:hover:bg-zinc-800/60",
                     )}
                   >
+                    {section.icon && <section.icon size={15} className="shrink-0 text-zinc-400" />}
                     <span className="font-medium text-zinc-800 dark:text-zinc-100">{section.label}</span>
                     <span className="ml-auto max-w-[7rem] truncate text-xs text-zinc-400">{summary(section)}</span>
                     <ChevronRight size={14} className="shrink-0 text-zinc-400" />

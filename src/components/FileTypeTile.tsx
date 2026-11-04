@@ -2,7 +2,7 @@ import { File, FileArchive, FileCode, FileImage, FileSpreadsheet, FileText, Pres
 import { cn } from "@/lib/cn";
 import { KIND_TONE, fileKindOf, type FileKind } from "@/lib/fileKind";
 
-const KIND_ICON: Record<FileKind, LucideIcon> = {
+export const KIND_ICON: Record<FileKind, LucideIcon> = {
   pdf: FileText,
   spreadsheet: FileSpreadsheet,
   document: FileText,
