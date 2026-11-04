@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronDown, Loader2, Sparkles } from "lucide-react";
+import { ChevronDown, Sparkles } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
+import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { InsightCard } from "@/components/InsightCard";
 import { formatCardDateTime } from "@/components/ContentCard";
 import { Button } from "@/components/ui/Button";
@@ -134,7 +136,15 @@ export function InsightsBoard({
           )}
         </div>
         <Button variant="primary" icon={loading ? undefined : Sparkles} loading={loading} onClick={generate}>
-          {loading ? "Searching and thinking..." : hasInsights ? "Regenerate" : "Generate insights"}
+          {loading ? (
+            <TextShimmer baseColor="rgba(255,255,255,0.6)" peakColor="#ffffff">
+              Searching and thinking...
+            </TextShimmer>
+          ) : hasInsights ? (
+            "Regenerate"
+          ) : (
+            "Generate insights"
+          )}
         </Button>
       </div>
 
@@ -148,8 +158,8 @@ export function InsightsBoard({
 
       {loading && !hasInsights && (
         <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-zinc-300 py-16 text-center dark:border-zinc-700">
-          <Loader2 size={22} className="animate-spin text-zinc-400" />
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">Looking at the work, then checking what is current.</p>
+          <Loader size="md" className="text-zinc-400" />
+          <TextShimmer className="text-sm">Looking at the work, then checking what is current.</TextShimmer>
         </div>
       )}
 

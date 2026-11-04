@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { ArrowRight, Eye, EyeOff, Lock, Mail } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { usernameToEmail } from "@/lib/emailDomain";
 import { CHAT_HISTORY_KEY } from "@/lib/chatHistory";
 import { ForgotPasswordForm } from "@/components/auth/ForgotPasswordForm";
@@ -229,7 +230,7 @@ export function LoginForm({ next, domain }: { next: string; domain: string }) {
         >
           {pending ? (
             <>
-              <Loader2 size={16} className="animate-spin" />
+              <Loader size={16} />
               Signing in…
             </>
           ) : (

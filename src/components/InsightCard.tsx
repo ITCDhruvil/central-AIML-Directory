@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Check } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { CARD_CTA_CLASS, formatCardDate } from "@/components/ContentCard";
 import { cn } from "@/lib/cn";
 import type { Insight } from "@/types/insight";
@@ -111,7 +112,7 @@ export function InsightCard({
         <div className="flex shrink-0 items-center gap-2">
           {error && <span className="text-xs text-red-600">{error}</span>}
           <button type="button" className={CARD_CTA_CLASS} disabled={saved || saving} onClick={handleSave}>
-            {saving ? <Loader2 size={16} className="animate-spin" /> : saved ? <Check size={16} /> : null}
+            {saving ? <Loader size={16} /> : saved ? <Check size={16} /> : null}
             {saving ? "Saving..." : saved ? "Saved as idea" : "Save as idea"}
           </button>
         </div>

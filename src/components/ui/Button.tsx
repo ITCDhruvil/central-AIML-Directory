@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { cn } from "@/lib/cn";
 
 export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "dangerSolid";
@@ -39,7 +39,7 @@ const BASE_CLASSES =
   "inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950 disabled:cursor-not-allowed disabled:opacity-50";
 
 function ButtonIcon({ icon: Icon, loading, size }: { icon?: IconType; loading?: boolean; size: ButtonSize }) {
-  if (loading) return <Loader2 size={ICON_SIZE[size]} className="animate-spin" />;
+  if (loading) return <Loader size={ICON_SIZE[size]} />;
   if (Icon) return <Icon size={ICON_SIZE[size]} />;
   return null;
 }

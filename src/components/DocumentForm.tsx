@@ -18,6 +18,7 @@ import {
 import { MANUAL_DOCUMENT_CATEGORIES, type DocumentCategory } from "@/types/documentation";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { Button } from "@/components/ui/Button";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
 const CATEGORY_ICONS: Record<DocumentCategory, LucideIcon> = {
   README: FileText,
@@ -33,6 +34,8 @@ const CATEGORY_ICONS: Record<DocumentCategory, LucideIcon> = {
 };
 
 const CATEGORY_OPTIONS = MANUAL_DOCUMENT_CATEGORIES.map((c) => ({ value: c, label: c, icon: CATEGORY_ICONS[c] }));
+
+const LABEL = "block text-[11px] font-medium uppercase tracking-wider text-zinc-400";
 
 export function DocumentForm({
   projectId,
@@ -54,6 +57,9 @@ export function DocumentForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const dirty =
+    title !== (document?.title ?? "") || category !== (document?.category ?? "NOTES") || content !== (document?.content ?? "");
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -93,47 +99,54 @@ export function DocumentForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       {formError && (
-        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
-          {formError}
-        </p>
+        <p className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">{formError}</p>
       )}
 
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Title</label>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} className="field mt-1 w-full" />
-        {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
+      <div className="grid grid-cols-1 gap-5 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900 sm:grid-cols-[1fr_14rem]">
+        <div className="min-w-0">
+          <label htmlFor="doc-title" className={LABEL}>
+            Title
+          </label>
+          <input
+            id="doc-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Untitled document"
+            className="mt-1.5 w-full border-0 border-b border-zinc-200 bg-transparent px-0 pb-2 text-xl font-semibold tracking-tight text-zinc-900 placeholder:text-zinc-300 focus:border-orange-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-600"
+          />
+          {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
+        </div>
+
+        <div>
+          <span className={LABEL}>Category</span>
+          <Dropdown value={category} onChange={(v) => setCategory(v as DocumentCategory)} options={CATEGORY_OPTIONS} className="mt-1.5 w-full" />
+        </div>
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Category</label>
-        <Dropdown
-          value={category}
-          onChange={(v) => setCategory(v as DocumentCategory)}
-          options={CATEGORY_OPTIONS}
-          className="mt-1 w-full"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Content <span className="font-normal text-zinc-400">(Markdown)</span>
-        </label>
-        <textarea
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          rows={16}
-          className="field mt-1 w-full font-mono"
-        />
+        <span className={`${LABEL} mb-1.5`}>Content</span>
+        <RichTextEditor value={content} onChange={setContent} placeholder="Write the document. Use the toolbar for headings, lists, tables and more." className="min-h-[28rem]" />
         {errors.content && <p className="mt-1 text-xs text-red-600">{errors.content}</p>}
       </div>
 
-      <div className="flex gap-2 pt-2">
-        <Button type="submit" variant="primary" icon={Check} loading={submitting}>
-          {submitting ? "Saving..." : isEdit ? "Save Changes" : "Create Document"}
-        </Button>
-        <Button type="button" variant="secondary" onClick={() => router.push(cancelHref)}>
-          Cancel
-        </Button>
+      <div className="sticky bottom-0 -mx-1 flex items-center justify-between gap-3 border-t border-zinc-200 bg-zinc-100/80 px-1 py-3 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
+        <p className="flex items-center gap-2 text-xs text-zinc-400">
+          {dirty ? (
+            <>
+              <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Unsaved changes
+            </>
+          ) : (
+            "No changes yet"
+          )}
+        </p>
+        <div className="flex gap-2">
+          <Button type="button" variant="secondary" onClick={() => router.push(cancelHref)}>
+            Cancel
+          </Button>
+          <Button type="submit" variant="primary" icon={Check} loading={submitting}>
+            {submitting ? "Saving..." : isEdit ? "Save changes" : "Create document"}
+          </Button>
+        </div>
       </div>
     </form>
   );

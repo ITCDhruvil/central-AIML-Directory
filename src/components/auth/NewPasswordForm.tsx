@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Eye, EyeOff, Loader2, Lock, X } from "lucide-react";
+import { Check, Eye, EyeOff, Lock, X } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { PasswordStrengthMeter } from "@/components/auth/PasswordStrengthMeter";
 import { useSecurityPolicy } from "@/components/PolicyProvider";
 import { passwordStrength } from "@/lib/auth/passwordStrength";
@@ -211,7 +212,7 @@ export function NewPasswordForm({
       >
         {pending ? (
           <>
-            <Loader2 size={16} className="animate-spin" />
+            <Loader size={16} />
             Saving…
           </>
         ) : (

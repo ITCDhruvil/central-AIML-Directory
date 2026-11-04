@@ -39,7 +39,7 @@ import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
 import type { EnvironmentCredentialView, EnvironmentLinkView, EnvironmentView } from "@/types/environment";
 
-const STATUS_LABEL: Record<EnvironmentStatus, string> = {
+export const STATUS_LABEL: Record<EnvironmentStatus, string> = {
   LIVE: "Live",
   DOWN: "Down",
   NOT_DEPLOYED: "Not deployed",
@@ -47,7 +47,7 @@ const STATUS_LABEL: Record<EnvironmentStatus, string> = {
   UNKNOWN: "Unknown",
 };
 
-const STATUS_STYLE: Record<EnvironmentStatus, string> = {
+export const STATUS_STYLE: Record<EnvironmentStatus, string> = {
   LIVE: "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
   DOWN: "bg-red-50 text-red-700 dark:bg-red-500/10 dark:text-red-400",
   NOT_DEPLOYED: "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300",
@@ -527,7 +527,7 @@ function CredentialItem({
   );
 }
 
-const STATUS_DOT: Record<EnvironmentStatus, string> = {
+export const STATUS_DOT: Record<EnvironmentStatus, string> = {
   LIVE: "bg-green-500",
   DOWN: "bg-red-500",
   PLANNED: "bg-blue-400",
@@ -536,7 +536,7 @@ const STATUS_DOT: Record<EnvironmentStatus, string> = {
 };
 
 /** A recognisable icon per well-known environment name; anything custom gets the server icon. */
-function EnvIcon({ name, size }: { name: string; size: number }) {
+export function EnvIcon({ name, size }: { name: string; size: number }) {
   const n = name.trim().toLowerCase();
   if (n.startsWith("dev") || n === "local") return <Laptop size={size} />;
   if (n === "qa" || n === "test" || n.startsWith("qa")) return <FlaskConical size={size} />;

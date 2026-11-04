@@ -419,3 +419,20 @@ input.autofill-clean:-webkit-autofill:focus {
     -webkit-text-fill-color: currentColor;
   }
 }
+
+/* Classic loader (components/prompt-kit/loader.tsx): each of the twelve bars fades out and back in, offset round the circle. */
+@keyframes loader-fade {
+  0% { opacity: 1; }
+  100% { opacity: 0.15; }
+}
+
+.loader-bar {
+  animation: loader-fade 1.2s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loader-bar {
+    animation: none;
+    opacity: 0.6;
+  }
+}

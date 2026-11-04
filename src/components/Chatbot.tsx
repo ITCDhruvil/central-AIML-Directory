@@ -18,11 +18,11 @@ import {
   ArrowUpRight,
   Check,
   History,
-  Loader2,
   MessageSquare,
   Plus,
   X,
 } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { cn } from "@/lib/cn";
 import { MarkdownView } from "@/components/MarkdownView";
 import { ChatCredentialsCard } from "@/components/ChatCredentialsCard";
@@ -704,7 +704,7 @@ export function Chatbot() {
                     )}
                   >
                     {loading ? (
-                      <Loader2 size={17} className="animate-spin" />
+                      <Loader size={17} />
                     ) : (
                       <ArrowUp size={17} />
                     )}

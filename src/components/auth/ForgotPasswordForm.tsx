@@ -6,9 +6,9 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
-  Loader2,
   Mail,
 } from "lucide-react";
+import { Loader } from "@/components/prompt-kit/loader";
 import { usernameToEmail } from "@/lib/emailDomain";
 
 function BackLink({
@@ -155,7 +155,7 @@ export function ForgotPasswordForm({
       >
         {pending ? (
           <>
-            <Loader2 size={16} className="animate-spin" />
+            <Loader size={16} />
             Sending…
           </>
         ) : (

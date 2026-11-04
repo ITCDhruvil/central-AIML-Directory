@@ -359,7 +359,12 @@ export default async function ProjectDetailPage({
         environments={environmentsPanel}
         sidebar={detailsColumn}
         actions={
-          <ProjectActions id={project.id} name={project.name} deploymentUrl={project.deploymentUrls[0] ?? null} />
+          <ProjectActions
+            id={project.id}
+            name={project.name}
+            deploymentUrl={project.deploymentUrls[0] ?? null}
+            environments={environments.map((e) => ({ id: e.id, name: e.name, url: e.appUrl, status: e.status, isProduction: e.isProduction }))}
+          />
         }
         footer={
           <p className="text-xs text-zinc-400">
