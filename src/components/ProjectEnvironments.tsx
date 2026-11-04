@@ -1,20 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Activity,
+  CalendarClock,
   Check,
   ChevronDown,
   ChevronUp,
+  ClipboardCheck,
+  Clock,
   Copy,
+  Database,
   Download,
   Eye,
   EyeOff,
   ExternalLink,
+  FlaskConical,
+  Globe,
+  Info,
   KeyRound,
+  Laptop,
   Link2,
+  LogIn,
+  MoreVertical,
   Pencil,
   Plus,
+  Rocket,
   Server,
   ShieldAlert,
   Trash2,
@@ -24,6 +35,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { formatRelativeTime } from "@/lib/formatRelativeTime";
+import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
 import type { EnvironmentCredentialView, EnvironmentLinkView, EnvironmentView } from "@/types/environment";
 
@@ -266,11 +278,17 @@ function LinkForm({
   }
 
   return (
-    <form onSubmit={submit} className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_2fr_1fr]">
-        <input className="field w-full" placeholder="Label" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} autoFocus />
-        <input className="field w-full" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
-        <input className="field w-full" placeholder="Group (optional)" list="env-link-groups" value={group} onChange={(e) => setGroup(e.target.value)} maxLength={80} />
+    <form onSubmit={submit} className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_2fr_1fr]">
+        <Label text="Label">
+          <input className="field w-full" placeholder="e.g. Swagger" value={label} onChange={(e) => setLabel(e.target.value)} maxLength={80} autoFocus />
+        </Label>
+        <Label text="URL">
+          <input className="field w-full" placeholder="https://…" value={url} onChange={(e) => setUrl(e.target.value)} />
+        </Label>
+        <Label text="Group (optional)">
+          <input className="field w-full" placeholder="Docs, Azure Portal…" list="env-link-groups" value={group} onChange={(e) => setGroup(e.target.value)} maxLength={80} />
+        </Label>
         <datalist id="env-link-groups">
           {LINK_GROUPS.map((g) => (
             <option key={g} value={g} />
@@ -279,11 +297,11 @@ function LinkForm({
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" size="sm" loading={saving}>
-          Save
+          Save link
         </Button>
       </div>
     </form>
@@ -326,43 +344,48 @@ function CredentialForm({
   }
 
   return (
-    <form onSubmit={submit} autoComplete="off" className="space-y-2 rounded-md border border-zinc-200 p-3 dark:border-zinc-800">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <input className="field w-full" placeholder="Role or purpose (e.g. admin)" value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={80} autoFocus />
-        <input className="field w-full" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
-        <input
-          className="field w-full"
-          type="password"
-          placeholder={initial?.hasPassword ? "New password (leave empty to keep)" : "Password"}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete="new-password"
-        />
-        <input className="field w-full" placeholder="Notes (optional)" value={notes} onChange={(e) => setNotes(e.target.value)} />
+    <form onSubmit={submit} autoComplete="off" className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <Label text="Role or purpose">
+          <input className="field w-full" placeholder="e.g. admin, non-admin" value={purpose} onChange={(e) => setPurpose(e.target.value)} maxLength={80} autoFocus />
+        </Label>
+        <Label text="Username">
+          <input className="field w-full" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
+        </Label>
+        <Label text={initial?.hasPassword ? "New password (leave empty to keep the current one)" : "Password"}>
+          <input className="field w-full" type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+        </Label>
+        <Label text="Notes (optional)">
+          <input className="field w-full" value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Label>
       </div>
+      <p className="text-[11px] text-zinc-400">Passwords are stored encrypted and only shown to people who can edit this project.</p>
       {error && <p className="text-xs text-red-600">{error}</p>}
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit" variant="primary" size="sm" loading={saving}>
-          Save
+          Save test user
         </Button>
       </div>
     </form>
   );
 }
 
-function CredentialRow({
+function CredentialItem({
   cred,
   canEdit,
   base,
+  openUrl,
   onEdit,
   onDelete,
 }: {
   cred: EnvironmentCredentialView;
   canEdit: boolean;
   base: string;
+  /** The environment's app address, opened by "Login & open". */
+  openUrl: string | null;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -370,6 +393,7 @@ function CredentialRow({
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
+  const [note, setNote] = useState("");
 
   // The password only exists in this component's state, for a short time after Reveal; it is never put in storage.
   async function fetchPassword(): Promise<string | null> {
@@ -404,50 +428,219 @@ function CredentialRow({
     }
   }
 
+  // Not an automatic sign-in: we can't type into another site's page. This copies the password (an audited Reveal),
+  // opens the app, and the person pastes it. The tab is opened after the copy because a new tab takes the focus the
+  // clipboard needs.
+  async function loginAndOpen() {
+    const pw = shown ?? (await fetchPassword());
+    if (pw === null || !openUrl) return;
+    try {
+      await navigator.clipboard.writeText(pw);
+    } catch {
+      setError("Could not copy to the clipboard");
+      return;
+    }
+    window.open(openUrl, "_blank", "noopener,noreferrer");
+    setNote(`Password copied. Sign in as ${cred.username} and paste it.`);
+    window.setTimeout(() => setNote(""), 10000);
+  }
+
   return (
-    <tr className="border-t border-zinc-100 align-top dark:border-zinc-800">
-      <td className="py-2 pr-3 text-sm text-zinc-800 dark:text-zinc-200">{cred.purpose}</td>
-      <td className="py-2 pr-3 font-mono text-xs text-zinc-700 dark:text-zinc-300">{cred.username}</td>
-      <td className="py-2 pr-3">
-        {!cred.hasPassword ? (
-          <span className="text-xs text-zinc-400">Not set</span>
-        ) : !canEdit ? (
-          <span className="text-xs text-zinc-400" title="Only people who can edit this project can see passwords">
-            ••••••••
-          </span>
-        ) : (
-          <div className="flex items-center gap-1">
-            <span className="font-mono text-xs text-zinc-700 dark:text-zinc-300">{shown ?? "••••••••"}</span>
-            <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
-              {shown ? <EyeOff size={14} /> : <Eye size={14} />}
-            </button>
-            <button type="button" className={ICON_BUTTON} onClick={copy} disabled={busy} aria-label="Copy password" title="Copy">
-              {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-            </button>
+    <li className="group rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800/50">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-52 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+            <KeyRound size={16} />
           </div>
-        )}
-        {error && <p className="text-[11px] text-red-600">{error}</p>}
-        {cred.hasPassword && <EditedBy name={cred.passwordUpdatedByName} at={cred.passwordUpdatedAt} />}
-      </td>
-      <td className="py-2 pr-3 text-xs text-zinc-500">
-        {cred.notes}
-        <div>
-          <EditedBy name={cred.updatedByName} at={cred.updatedAt} />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{cred.purpose}</p>
+            {cred.notes && <p className="truncate text-xs text-zinc-400" title={cred.notes}>{cred.notes}</p>}
+          </div>
         </div>
-      </td>
-      <td className="py-2 text-right">
+
+        <div className="min-w-0 basis-48">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Username</p>
+          <div className="mt-0.5 flex items-center gap-1">
+            <span className="min-w-0 truncate font-mono text-sm text-zinc-800 dark:text-zinc-100">{cred.username}</span>
+            <CopyButton text={cred.username} label="Copy username" />
+          </div>
+        </div>
+
+        <div className="min-w-0 basis-48">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Password</p>
+          <div className="mt-0.5 flex min-h-[1.75rem] items-center gap-1">
+            {!cred.hasPassword ? (
+              <span className="text-sm text-zinc-400">Not set</span>
+            ) : !canEdit ? (
+              <span className="font-mono text-sm text-zinc-400" title="Only people who can edit this project can see passwords">
+                ••••••••
+              </span>
+            ) : (
+              <>
+                <span className="min-w-0 truncate font-mono text-sm text-zinc-800 dark:text-zinc-100">{shown ?? "••••••••"}</span>
+                <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
+                  {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+                {copied ? (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" role="status">
+                    <Check size={13} /> Copied!
+                  </span>
+                ) : (
+                  <button type="button" className={ICON_BUTTON} onClick={copy} disabled={busy} aria-label="Copy password" title="Copy password">
+                    <Copy size={14} />
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+
+        {canEdit && openUrl && cred.hasPassword && (
+          <Button variant="secondary" size="sm" icon={LogIn} onClick={loginAndOpen} loading={busy} className="rounded-lg" title="Copy the password and open the app">
+            Login &amp; open
+          </Button>
+        )}
+
         {canEdit && (
-          <div className="flex justify-end">
-            <button type="button" className={ICON_BUTTON} onClick={onEdit} aria-label="Edit test account" title="Edit">
+          <div className="ml-auto flex items-center transition sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+            <button type="button" className={ICON_BUTTON} onClick={onEdit} aria-label="Edit test user" title="Edit">
               <Pencil size={14} />
             </button>
-            <button type="button" className={ICON_BUTTON} onClick={onDelete} aria-label="Delete test account" title="Delete">
+            <button type="button" className={ICON_BUTTON} onClick={onDelete} aria-label="Delete test user" title="Delete">
               <Trash2 size={14} />
             </button>
           </div>
         )}
-      </td>
-    </tr>
+      </div>
+      {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
+      {note && (
+        <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400" role="status">
+          <Check size={13} /> {note}
+        </p>
+      )}
+      {cred.hasPassword && cred.passwordUpdatedAt && (
+        <p className="mt-2 text-[11px] text-zinc-400">
+          Password changed <EditedBy name={cred.passwordUpdatedByName} at={cred.passwordUpdatedAt} />
+        </p>
+      )}
+    </li>
+  );
+}
+
+const STATUS_DOT: Record<EnvironmentStatus, string> = {
+  LIVE: "bg-green-500",
+  DOWN: "bg-red-500",
+  PLANNED: "bg-blue-400",
+  NOT_DEPLOYED: "bg-zinc-400",
+  UNKNOWN: "bg-zinc-400",
+};
+
+/** A recognisable icon per well-known environment name; anything custom gets the server icon. */
+function EnvIcon({ name, size }: { name: string; size: number }) {
+  const n = name.trim().toLowerCase();
+  if (n.startsWith("dev") || n === "local") return <Laptop size={size} />;
+  if (n === "qa" || n === "test" || n.startsWith("qa")) return <FlaskConical size={size} />;
+  if (n === "uat" || n.includes("stag") || n.includes("pre")) return <ClipboardCheck size={size} />;
+  if (n.startsWith("prod") || n === "live") return <Rocket size={size} />;
+  if (n.includes("demo") || n.includes("sandbox")) return <Globe size={size} />;
+  return <Server size={size} />;
+}
+
+function hostOf(url: string): string {
+  try {
+    const u = new URL(url);
+    // Host plus path, so https://host/app shows as host/app; a bare trailing slash is dropped.
+    return u.host + (u.pathname === "/" ? "" : u.pathname.replace(/\/$/, ""));
+  } catch {
+    return url;
+  }
+}
+
+type MenuItem = { label: string; icon: React.ElementType<{ size?: number }>; onClick: () => void; danger?: boolean; disabled?: boolean };
+
+/** The "more" menu that holds the less common actions, so the card header stays readable. */
+function ActionMenu({ items, label }: { items: MenuItem[]; label: string }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useClickOutside(ref, () => setOpen(false), open);
+  if (items.length === 0) return null;
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" className={ICON_BUTTON} aria-label={label} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
+        <MoreVertical size={16} />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-20 mt-1 w-52 rounded-md border border-zinc-200 bg-white py-1 text-sm shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {items.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              disabled={item.disabled}
+              onClick={() => {
+                setOpen(false);
+                item.onClick();
+              }}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left disabled:opacity-40 ${
+                item.danger
+                  ? "text-red-600 hover:bg-red-50 dark:hover:bg-red-950"
+                  : "text-zinc-700 hover:bg-zinc-50 dark:text-zinc-200 dark:hover:bg-zinc-800"
+              }`}
+            >
+              <item.icon size={14} />
+              {item.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Icon-only copy button. After a copy it shows a green "Copied!" in the same spot, then goes back to the icon. */
+function CopyButton({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked: leave the icon as it is
+    }
+  }
+
+  if (copied) {
+    return (
+      <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" role="status">
+        <Check size={13} /> Copied!
+      </span>
+    );
+  }
+  return (
+    <button type="button" onClick={copy} aria-label={label} title={label} className="shrink-0 rounded p-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
+      <Copy size={13} />
+    </button>
+  );
+}
+
+function Detail({ label, copy, children }: { label: string; copy?: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">{label}</dt>
+      <dd className="mt-1 flex items-start gap-1.5 text-sm font-medium text-zinc-800 dark:text-zinc-100">
+        <span className="min-w-0 break-words">{children}</span>
+        {copy && <CopyButton text={copy} label={`Copy ${label.toLowerCase()}`} />}
+      </dd>
+    </div>
+  );
+}
+
+function UrlValue({ url }: { url: string }) {
+  return (
+    <a href={url} target="_blank" rel="noopener noreferrer" title={url} className="inline-flex max-w-full items-center gap-1 hover:text-orange-600 hover:underline dark:hover:text-orange-400">
+      <span className="truncate">{hostOf(url)}</span>
+    </a>
   );
 }
 
@@ -464,6 +657,7 @@ function EnvironmentCard({
   isFirst,
   isLast,
   takenNames,
+  defaultOpen,
   run,
   onMove,
 }: {
@@ -473,6 +667,7 @@ function EnvironmentCard({
   isFirst: boolean;
   isLast: boolean;
   takenNames: string[];
+  defaultOpen: boolean;
   run: (fn: () => Promise<ApiResult>) => Promise<void>;
   onMove: (direction: -1 | 1) => void;
 }) {
@@ -481,17 +676,19 @@ function EnvironmentCard({
   const [confirm, setConfirm] = useState<null | { kind: "env" } | { kind: "link"; id: string } | { kind: "cred"; id: string }>(null);
   const [copiedUrl, setCopiedUrl] = useState(false);
   const [pinging, setPinging] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
 
   const mainUrl = env.appUrl ?? env.apiUrl;
-  const details: [string, string | null][] = [
-    ["App URL", env.appUrl],
-    ["API / gateway URL", env.apiUrl],
-    ["Health check", env.healthUrl],
-    ["Hosting", env.hosting],
-    ["Database set", env.databaseSet],
-    ["Version / tag", env.version],
-    ["Last deployed", env.lastDeployedAt ? new Date(env.lastDeployedAt).toLocaleDateString() : null],
-  ];
+  const hasDetails = Boolean(env.appUrl || env.apiUrl || env.healthUrl || env.hosting || env.databaseSet || env.version || env.lastDeployedAt);
+  const expanded = open || editing === "env";
+  const summary = [
+    mainUrl ? hostOf(mainUrl) : null,
+    env.version,
+    `${env.links.length} link${env.links.length === 1 ? "" : "s"}`,
+    env.isProduction ? null : `${env.credentials.length} test user${env.credentials.length === 1 ? "" : "s"}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
 
   async function copyUrl() {
     if (!mainUrl) return;
@@ -510,10 +707,37 @@ function EnvironmentCard({
     setPinging(false);
   }
 
-  const grouped = [...new Set(env.links.map((l) => l.group ?? ""))];
+  const menuItems: MenuItem[] = [
+    ...(env.healthUrl
+      ? [{ label: "Open health check", icon: Activity, onClick: () => window.open(env.healthUrl as string, "_blank", "noopener,noreferrer") }]
+      : []),
+    ...(canEdit
+      ? [
+          {
+            label: "Edit",
+            icon: Pencil,
+            onClick: () => {
+              setOpen(true);
+              setEditing("env");
+            },
+          },
+          {
+            label: "Duplicate (no test users)",
+            icon: Copy,
+            onClick: () => {
+              const name = window.prompt(`Name for the copy of ${env.name}:`, `${env.name} copy`)?.trim();
+              if (name) run(() => call("POST", `/api/projects/${projectId}/environments`, { duplicateFrom: env.id, name })).catch(() => {});
+            },
+          },
+          { label: "Move up", icon: ChevronUp, onClick: () => onMove(-1), disabled: isFirst },
+          { label: "Move down", icon: ChevronDown, onClick: () => onMove(1), disabled: isLast },
+          { label: "Delete", icon: Trash2, onClick: () => setConfirm({ kind: "env" }), danger: true },
+        ]
+      : []),
+  ];
 
   return (
-    <section className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+    <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
       {editing === "env" ? (
         <EnvironmentForm
           initial={env}
@@ -526,143 +750,169 @@ function EnvironmentCard({
         />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Server size={16} className="text-zinc-400" />
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{env.name}</h3>
-            <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${STATUS_STYLE[env.status]}`}>{STATUS_LABEL[env.status]}</span>
-            {env.isProduction && (
-              <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
-                <ShieldAlert size={12} /> Production
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-3">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                <EnvIcon name={env.name} size={20} />
+              </div>
+              <h3 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">{env.name}</h3>
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_STYLE[env.status]}`}>
+                <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[env.status]}`} />
+                {STATUS_LABEL[env.status]}
               </span>
-            )}
-            <div className="ml-auto flex items-center">
+              {env.isProduction && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700 dark:bg-amber-500/10 dark:text-amber-400">
+                  <ShieldAlert size={12} /> Production
+                </span>
+              )}
+              {!expanded && <span className="hidden min-w-0 truncate text-xs text-zinc-400 md:inline">{summary}</span>}
+            </div>
+            <div className="flex items-center gap-2">
               {mainUrl && (
                 <>
-                  <Button href={mainUrl} external icon={ExternalLink} variant="secondary" size="sm" className="mr-1">
-                    Open app
+                  <Button href={mainUrl} external icon={ExternalLink} variant="secondary" size="sm" className="rounded-lg">
+                    Open
                   </Button>
-                  <button type="button" className={ICON_BUTTON} onClick={copyUrl} aria-label="Copy URL" title="Copy URL">
-                    {copiedUrl ? <Check size={14} className="text-green-600" /> : <Copy size={14} />}
-                  </button>
+                  <Button variant="secondary" size="sm" icon={copiedUrl ? Check : Copy} onClick={copyUrl} className="rounded-lg">
+                    {copiedUrl ? "Copied" : "Copy URL"}
+                  </Button>
                 </>
               )}
-              {env.healthUrl && (
-                <a href={env.healthUrl} target="_blank" rel="noopener noreferrer" className={ICON_BUTTON} aria-label="Open health check" title="Open health check">
-                  <Activity size={14} />
-                </a>
+              {canEdit && env.healthUrl && (
+                <Button variant="secondary" size="sm" icon={Activity} onClick={ping} loading={pinging} className="rounded-lg" title="Check the health URL and update the status">
+                  Ping
+                </Button>
               )}
-              {canEdit && (
-                <>
-                  {env.healthUrl && (
-                    <Button variant="ghost" size="sm" onClick={ping} loading={pinging}>
-                      Ping
-                    </Button>
-                  )}
-                  <button type="button" className={ICON_BUTTON} disabled={isFirst} onClick={() => onMove(-1)} aria-label="Move up" title="Move up">
-                    <ChevronUp size={14} />
-                  </button>
-                  <button type="button" className={ICON_BUTTON} disabled={isLast} onClick={() => onMove(1)} aria-label="Move down" title="Move down">
-                    <ChevronDown size={14} />
-                  </button>
-                  <button type="button" className={ICON_BUTTON} onClick={() => setEditing("env")} aria-label="Edit environment" title="Edit">
-                    <Pencil size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    className={ICON_BUTTON}
-                    aria-label="Duplicate environment"
-                    title="Duplicate (without test accounts)"
-                    onClick={() => {
-                      const name = window.prompt(`Name for the copy of ${env.name}:`, `${env.name} copy`)?.trim();
-                      if (name) run(() => call("POST", `/api/projects/${projectId}/environments`, { duplicateFrom: env.id, name })).catch(() => {});
-                    }}
-                  >
-                    <Copy size={14} />
-                  </button>
-                  <button type="button" className={ICON_BUTTON} onClick={() => setConfirm({ kind: "env" })} aria-label="Delete environment" title="Delete">
-                    <Trash2 size={14} />
-                  </button>
-                </>
-              )}
+              <button type="button" className={ICON_BUTTON} onClick={() => setOpen((v) => !v)} aria-expanded={expanded} aria-label={expanded ? "Collapse" : "Expand"}>
+                <ChevronDown size={16} className={`transition-transform ${expanded ? "" : "-rotate-90"}`} />
+              </button>
+              <ActionMenu items={menuItems} label={`More actions for ${env.name}`} />
             </div>
           </div>
 
-          <dl className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 text-sm sm:grid-cols-2">
-            {details
-              .filter(([, v]) => v)
-              .map(([k, v]) => (
-                <div key={k} className="flex gap-2">
-                  <dt className="w-32 shrink-0 text-zinc-500 dark:text-zinc-400">{k}</dt>
-                  <dd className="min-w-0 break-words text-zinc-800 dark:text-zinc-200">{v}</dd>
+          {expanded && (
+            <div className="mt-5 space-y-4 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+              {hasDetails ? (
+                <dl className="grid grid-cols-1 gap-x-8 gap-y-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {env.appUrl && (
+                    <Detail label="App" copy={env.appUrl}>
+                      <UrlValue url={env.appUrl} />
+                    </Detail>
+                  )}
+                  {env.apiUrl && (
+                    <Detail label="API / gateway" copy={env.apiUrl}>
+                      <UrlValue url={env.apiUrl} />
+                    </Detail>
+                  )}
+                  {env.healthUrl && (
+                    <Detail label="Health check" copy={env.healthUrl}>
+                      <UrlValue url={env.healthUrl} />
+                    </Detail>
+                  )}
+                  {env.hosting && <Detail label="Hosting" copy={env.hosting}>{env.hosting}</Detail>}
+                  {env.databaseSet && (
+                    <Detail label="Database set" copy={env.databaseSet}>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Database size={13} className="shrink-0 text-zinc-400" />
+                        {env.databaseSet}
+                      </span>
+                    </Detail>
+                  )}
+                  {env.version && <Detail label="Version / tag" copy={env.version}>{env.version}</Detail>}
+                  {env.lastDeployedAt && (
+                    <Detail label="Last deployed">
+                      <span className="inline-flex items-center gap-1.5">
+                        <CalendarClock size={13} className="shrink-0 text-zinc-400" />
+                        {new Date(env.lastDeployedAt).toLocaleDateString()}
+                      </span>
+                    </Detail>
+                  )}
+                </dl>
+              ) : (
+                <p className="text-sm text-zinc-400">No details yet.{canEdit ? " Use the menu, then Edit, to add URLs, hosting and more." : ""}</p>
+              )}
+              {env.notes && (
+                <div className="flex items-start gap-3 rounded-xl bg-blue-500/5 px-4 py-3 text-sm text-zinc-700 dark:bg-blue-400/10 dark:text-zinc-200">
+                  <Info size={16} className="mt-0.5 shrink-0 text-blue-500" />
+                  <p className="whitespace-pre-wrap">{env.notes}</p>
                 </div>
-              ))}
-          </dl>
-          {env.notes && <p className="mt-2 whitespace-pre-wrap text-sm text-zinc-600 dark:text-zinc-300">{env.notes}</p>}
-          <div className="mt-1 flex flex-wrap gap-x-3">
-            <EditedBy name={env.updatedByName} at={env.updatedAt} />
-            {env.lastCheckedAt && <span className="text-[11px] text-zinc-400">Health checked {formatRelativeTime(env.lastCheckedAt)}</span>}
-          </div>
+              )}
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-zinc-400">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock size={13} />
+                  <EditedBy name={env.updatedByName} at={env.updatedAt} />
+                </span>
+                {env.lastCheckedAt && <span>Health checked {formatRelativeTime(env.lastCheckedAt)}</span>}
+              </div>
+            </div>
+          )}
         </>
       )}
 
+      {expanded && (
+        <>
       {/* Links */}
-      <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-        <div className="flex items-center justify-between">
-          <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            <Link2 size={13} /> Links
-          </h4>
+      <div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Links</h4>
           {canEdit && editing !== "newLink" && (
-            <Button variant="ghost" size="sm" icon={Plus} onClick={() => setEditing("newLink")}>
+            <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing("newLink")} className="rounded-lg">
               Add link
             </Button>
           )}
         </div>
-        {env.links.length === 0 && editing !== "newLink" && <p className="mt-1 text-xs text-zinc-400">No links yet.</p>}
-        <div className="mt-2 space-y-2">
-          {grouped.map((g) => (
-            <div key={g || "none"}>
-              {g && <p className="mb-1 text-[11px] font-medium text-zinc-400">{g}</p>}
-              <ul className="space-y-1">
-                {env.links
-                  .filter((l) => (l.group ?? "") === g)
-                  .map((l) =>
-                    typeof editing === "object" && editing && "link" in editing && editing.link === l.id ? (
-                      <li key={l.id}>
-                        <LinkForm
-                          initial={l}
-                          onCancel={() => setEditing(null)}
-                          onSave={async (body) => {
-                            await run(() => call("PUT", `${base}/links/${l.id}`, body));
-                            setEditing(null);
-                          }}
-                        />
-                      </li>
-                    ) : (
-                      <li key={l.id} className="flex items-center gap-2 text-sm">
-                        <a href={l.url} target="_blank" rel="noopener noreferrer" className="inline-flex min-w-0 items-center gap-1.5 text-orange-600 hover:underline dark:text-orange-400">
-                          <ExternalLink size={12} className="shrink-0" />
-                          <span className="truncate">{l.label}</span>
-                        </a>
-                        <span className="hidden min-w-0 truncate text-xs text-zinc-400 sm:inline">{l.url}</span>
-                        {canEdit && (
-                          <span className="ml-auto flex shrink-0">
-                            <button type="button" className={ICON_BUTTON} onClick={() => setEditing({ link: l.id })} aria-label="Edit link" title="Edit">
-                              <Pencil size={13} />
-                            </button>
-                            <button type="button" className={ICON_BUTTON} onClick={() => setConfirm({ kind: "link", id: l.id })} aria-label="Delete link" title="Delete">
-                              <Trash2 size={13} />
-                            </button>
-                          </span>
-                        )}
-                      </li>
-                    ),
-                  )}
-              </ul>
-            </div>
-          ))}
-        </div>
+        {env.links.length === 0 && editing !== "newLink" && (
+          <p className="mt-3 text-sm text-zinc-400">No links yet.{canEdit ? " Add docs, dashboards or portal pages for this environment." : ""}</p>
+        )}
+        {env.links.length > 0 && (
+          <ul className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
+            {env.links.map((l) =>
+              typeof editing === "object" && editing && "link" in editing && editing.link === l.id ? (
+                <li key={l.id} className="lg:col-span-2">
+                  <LinkForm
+                    initial={l}
+                    onCancel={() => setEditing(null)}
+                    onSave={async (body) => {
+                      await run(() => call("PUT", `${base}/links/${l.id}`, body));
+                      setEditing(null);
+                    }}
+                  />
+                </li>
+              ) : (
+                <li key={l.id} className="group flex items-center gap-3 rounded-xl bg-zinc-50 px-3 py-2.5 dark:bg-zinc-800/50">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+                    <Link2 size={16} />
+                  </div>
+                  <a href={l.url} target="_blank" rel="noopener noreferrer" title={l.url} className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="truncate text-sm font-medium text-zinc-900 group-hover:text-orange-600 dark:text-zinc-100 dark:group-hover:text-orange-400">{l.label}</span>
+                      {l.group && <span className="shrink-0 rounded-full bg-zinc-200/70 px-2 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-zinc-700 dark:text-zinc-300">{l.group}</span>}
+                    </span>
+                    <span className="block truncate text-xs text-zinc-400">{hostOf(l.url)}</span>
+                  </a>
+                  <div className="flex shrink-0 items-center transition sm:opacity-0 sm:focus-within:opacity-100 sm:group-hover:opacity-100">
+                    <CopyButton text={l.url} label="Copy link" />
+                    <a href={l.url} target="_blank" rel="noopener noreferrer" className={ICON_BUTTON} aria-label="Open link" title="Open in a new tab">
+                      <ExternalLink size={14} />
+                    </a>
+                    {canEdit && (
+                      <>
+                        <button type="button" className={ICON_BUTTON} onClick={() => setEditing({ link: l.id })} aria-label="Edit link" title="Edit">
+                          <Pencil size={14} />
+                        </button>
+                        <button type="button" className={ICON_BUTTON} onClick={() => setConfirm({ kind: "link", id: l.id })} aria-label="Delete link" title="Delete">
+                          <Trash2 size={14} />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </li>
+              ),
+            )}
+          </ul>
+        )}
         {editing === "newLink" && (
-          <div className="mt-2">
+          <div className="mt-3">
             <LinkForm
               onCancel={() => setEditing(null)}
               onSave={async (body) => {
@@ -675,59 +925,47 @@ function EnvironmentCard({
       </div>
 
       {/* Test accounts: never offered for a Production environment */}
-      <div className="mt-4 border-t border-zinc-100 pt-3 dark:border-zinc-800">
-        <div className="flex items-center justify-between">
-          <h4 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-            <KeyRound size={13} /> Test users
-          </h4>
+      <div className="mt-5 border-t border-zinc-100 pt-5 dark:border-zinc-800">
+        <div className="flex items-center justify-between gap-3">
+          <h4 className="text-[11px] font-medium uppercase tracking-wider text-zinc-400">Test users</h4>
           {canEdit && !env.isProduction && editing !== "newCred" && (
-            <Button variant="ghost" size="sm" icon={Plus} onClick={() => setEditing("newCred")}>
+            <Button variant="secondary" size="sm" icon={Plus} onClick={() => setEditing("newCred")} className="rounded-lg">
               Add test user
             </Button>
           )}
         </div>
         {env.isProduction ? (
-          <p className="mt-1 text-xs text-zinc-400">Production environments never store test users or passwords.</p>
+          <div className="mt-3 flex items-start gap-3 rounded-xl bg-amber-500/5 px-4 py-3 text-sm text-zinc-600 dark:bg-amber-400/10 dark:text-zinc-300">
+            <ShieldAlert size={16} className="mt-0.5 shrink-0 text-amber-500" />
+            Production environments never store test users or passwords.
+          </div>
         ) : (
           <>
-            {env.credentials.length === 0 && editing !== "newCred" && <p className="mt-1 text-xs text-zinc-400">No test users yet.</p>}
+            {env.credentials.length === 0 && editing !== "newCred" && (
+              <p className="mt-3 text-sm text-zinc-400">No test users yet.{canEdit ? " Add the accounts testers should use here." : ""}</p>
+            )}
             {env.credentials.length > 0 && (
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full min-w-[34rem] text-left">
-                  <thead>
-                    <tr className="text-[11px] uppercase tracking-wide text-zinc-400">
-                      <th className="pb-1 pr-3 font-medium">Role / purpose</th>
-                      <th className="pb-1 pr-3 font-medium">Username</th>
-                      <th className="pb-1 pr-3 font-medium">Password</th>
-                      <th className="pb-1 pr-3 font-medium">Notes</th>
-                      <th />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {env.credentials.map((c) =>
-                      typeof editing === "object" && editing && "cred" in editing && editing.cred === c.id ? (
-                        <tr key={c.id}>
-                          <td colSpan={5} className="py-2">
-                            <CredentialForm
-                              initial={c}
-                              onCancel={() => setEditing(null)}
-                              onSave={async (body) => {
-                                await run(() => call("PUT", `${base}/credentials/${c.id}`, body));
-                                setEditing(null);
-                              }}
-                            />
-                          </td>
-                        </tr>
-                      ) : (
-                        <CredentialRow key={c.id} cred={c} canEdit={canEdit} base={base} onEdit={() => setEditing({ cred: c.id })} onDelete={() => setConfirm({ kind: "cred", id: c.id })} />
-                      ),
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <ul className="mt-3 space-y-2">
+                {env.credentials.map((c) =>
+                  typeof editing === "object" && editing && "cred" in editing && editing.cred === c.id ? (
+                    <li key={c.id}>
+                      <CredentialForm
+                        initial={c}
+                        onCancel={() => setEditing(null)}
+                        onSave={async (body) => {
+                          await run(() => call("PUT", `${base}/credentials/${c.id}`, body));
+                          setEditing(null);
+                        }}
+                      />
+                    </li>
+                  ) : (
+                    <CredentialItem key={c.id} cred={c} canEdit={canEdit} base={base} openUrl={mainUrl} onEdit={() => setEditing({ cred: c.id })} onDelete={() => setConfirm({ kind: "cred", id: c.id })} />
+                  ),
+                )}
+              </ul>
             )}
             {editing === "newCred" && (
-              <div className="mt-2">
+              <div className="mt-3">
                 <CredentialForm
                   onCancel={() => setEditing(null)}
                   onSave={async (body) => {
@@ -740,6 +978,9 @@ function EnvironmentCard({
           </>
         )}
       </div>
+
+        </>
+      )}
 
       <ConfirmDialog
         open={confirm !== null}
@@ -825,7 +1066,9 @@ export function ProjectEnvironments({
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Where this project runs, how to reach it, and the test accounts to use. Production never stores test users.
+          {envs.length === 0
+            ? "Where this project runs, how to reach it, and the test accounts to use."
+            : `${envs.length} environment${envs.length === 1 ? "" : "s"} · ${envs.filter((e) => e.status === "LIVE").length} live · production never stores test users`}
         </p>
         <div className="flex items-center gap-2">
           {envs.length > 0 && (
@@ -889,6 +1132,7 @@ export function ProjectEnvironments({
             isFirst={i === 0}
             isLast={i === envs.length - 1}
             takenNames={takenNames}
+            defaultOpen
             run={run}
             onMove={(d) => move(i, d)}
           />

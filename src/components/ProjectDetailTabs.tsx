@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from "react";
-import { FileText, LayoutGrid, Link2, Server, Sparkles } from "lucide-react";
+import { FileText, LayoutGrid, Server, Sparkles } from "lucide-react";
 import { FadeScroll } from "@/components/FadeScroll";
 import { FluidTabs } from "@/components/ui/FluidTabs";
 import { PanelCollapseRail } from "@/components/PanelCollapseRail";
@@ -11,7 +11,6 @@ const TABS = [
   { id: "documentation", label: "Documentation", icon: <FileText size={18} /> },
   { id: "askAi", label: "Ask AI", icon: <Sparkles size={18} /> },
   { id: "environments", label: "Environments", icon: <Server size={18} /> },
-  { id: "links", label: "Links", icon: <Link2 size={18} /> },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -83,7 +82,6 @@ export function ProjectDetailTabs({
   documentation,
   askAi,
   environments,
-  links,
   sidebar,
   footer,
   actions,
@@ -99,7 +97,7 @@ export function ProjectDetailTabs({
   const liveWidth = useRef(DEFAULT_DETAILS_WIDTH);
   const didDrag = useRef(false);
   const detailsWidth = draftWidth ?? storedWidth;
-  const panels: Record<TabId, ReactNode> = { overview, documentation, askAi, environments, links };
+  const panels: Record<TabId, ReactNode> = { overview, documentation, askAi, environments };
 
   function onDragStart(clientX: number) {
     dragStartX.current = clientX;

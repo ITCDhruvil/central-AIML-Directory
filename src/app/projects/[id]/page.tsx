@@ -10,7 +10,6 @@ import {
   BarChart3,
   CheckCircle2,
   ExternalLink,
-  FileText,
   IdCard,
   LayoutList,
   Link2,
@@ -170,9 +169,6 @@ export default async function ProjectDetailPage({
   const attentionIssues = getNeedsAttentionIssues(project);
   const isGithubConnected = Boolean(project.githubUrl && project.githubOwner && project.githubRepo);
 
-  const readmeDoc = documents.find((d) => d.category === "README");
-  const setupGuideDoc = documents.find((d) => d.source === "generated");
-  const architectureDoc = documents.find((d) => d.category === "ARCHITECTURE");
 
   const overviewPanel = (
     <>
@@ -294,47 +290,6 @@ export default async function ProjectDetailPage({
 
   const environmentsPanel = <ProjectEnvironments projectId={project.id} initial={environments} canEdit={canEditEnvs} />;
 
-  const linksPanel =
-    project.githubUrl || project.deploymentUrls.length > 0 || readmeDoc || setupGuideDoc || architectureDoc ? (
-      <SectionCard icon={Link2} title="Quick Links">
-        <div className="flex flex-wrap gap-2">
-          {project.githubUrl && (
-            <Button href={project.githubUrl} external icon={GithubIcon} variant="secondary" size="sm">
-              GitHub
-            </Button>
-          )}
-          {project.deploymentUrls.length > 0 && (
-            <Button href={project.deploymentUrls[0]} external icon={ExternalLink} variant="secondary" size="sm">
-              Deployment
-            </Button>
-          )}
-          {readmeDoc && (
-            <Button href={`/projects/${project.id}/documents/${readmeDoc.id}`} icon={FileText} variant="secondary" size="sm">
-              README
-            </Button>
-          )}
-          {setupGuideDoc && (
-            <Button href={`/projects/${project.id}/documents/${setupGuideDoc.id}`} icon={FileText} variant="secondary" size="sm">
-              Setup Guide
-            </Button>
-          )}
-          {architectureDoc && (
-            <Button href={`/projects/${project.id}/documents/${architectureDoc.id}`} icon={FileText} variant="secondary" size="sm">
-              Architecture
-            </Button>
-          )}
-        </div>
-      </SectionCard>
-    ) : (
-      <EmptyState
-        icon={Link2}
-        title="No links yet"
-        description="Connect a GitHub repository or add a deployment URL to see quick links here."
-        actionHref={canEditProject ? `/projects/${project.id}/edit` : undefined}
-        actionLabel={canEditProject ? "Edit Project" : undefined}
-      />
-    );
-
   const detailsColumn = (
     <>
       <SectionCard icon={Users} title="Team">
@@ -402,7 +357,6 @@ export default async function ProjectDetailPage({
         documentation={documentationPanel}
         askAi={askAiPanel}
         environments={environmentsPanel}
-        links={linksPanel}
         sidebar={detailsColumn}
         actions={
           <ProjectActions id={project.id} name={project.name} deploymentUrl={project.deploymentUrls[0] ?? null} />
