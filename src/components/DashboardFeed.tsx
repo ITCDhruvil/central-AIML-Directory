@@ -73,7 +73,7 @@ function FeedRow({
         </span>
         <span className="flex shrink-0 items-center gap-2 text-xs">
           <span className={cn("font-medium", metaClassName)}>{meta}</span>
-          <span className="text-zinc-400 dark:text-zinc-500">· {time}</span>
+          <span className="text-zinc-400 dark:text-zinc-500" suppressHydrationWarning>· {time}</span>
           <LinkPendingHint />
         </span>
       </Link>

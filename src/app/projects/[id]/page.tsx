@@ -374,7 +374,7 @@ export default async function ProjectDetailPage({
             {isGithubConnected && (
               <>
                 {" · "}
-                {project.lastSyncedAt ? `Synced ${formatRelativeTime(project.lastSyncedAt)}` : "Never synced"}
+                <span suppressHydrationWarning>{project.lastSyncedAt ? `Synced ${formatRelativeTime(project.lastSyncedAt)}` : "Never synced"}</span>
               </>
             )}
           </p>

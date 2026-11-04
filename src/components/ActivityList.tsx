@@ -60,7 +60,7 @@ export function ActivityList({ activities }: { activities: ProjectActivity[] }) 
                 <Icon size={14} className="mt-0.5 shrink-0 text-zinc-400" />
                 <div className="min-w-0 flex-1">
                   <p className="text-zinc-800 dark:text-zinc-200">{item.title}</p>
-                  <p className="text-xs text-zinc-400" title={formatDate(item.createdAt)}>
+                  <p className="text-xs text-zinc-400" title={formatDate(item.createdAt)} suppressHydrationWarning>
                     {formatRelativeTime(item.createdAt)}
                   </p>
                 </div>

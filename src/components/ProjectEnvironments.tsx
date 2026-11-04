@@ -92,7 +92,7 @@ function isHttpUrl(value: string): boolean {
 function EditedBy({ name, at }: { name: string | null; at: string | null }) {
   if (!at) return null;
   return (
-    <span className="text-[11px] text-zinc-400" title={new Date(at).toLocaleString()}>
+    <span className="text-[11px] text-zinc-400" title={new Date(at).toLocaleString()} suppressHydrationWarning>
       {name ? `${name} · ` : ""}
       {formatRelativeTime(at)}
     </span>
@@ -963,7 +963,7 @@ function EnvironmentCard({
                   <Clock size={13} />
                   <EditedBy name={env.updatedByName} at={env.updatedAt} />
                 </span>
-                {env.lastCheckedAt && <span>Health checked {formatRelativeTime(env.lastCheckedAt)}</span>}
+                {env.lastCheckedAt && <span suppressHydrationWarning>Health checked {formatRelativeTime(env.lastCheckedAt)}</span>}
               </div>
             </div>
           )}

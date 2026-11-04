@@ -172,7 +172,7 @@ export function GithubReposTable({ onExpired }: { onExpired?: () => void }) {
                       </span>
                     )}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-zinc-500 dark:text-zinc-400">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-zinc-500 dark:text-zinc-400" suppressHydrationWarning>
                     {repo.pushedAt ? formatRelativeTime(repo.pushedAt) : "—"}
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-right">
