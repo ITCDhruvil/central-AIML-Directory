@@ -37,6 +37,8 @@ import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownOption } from "@/components/ui/Dropdown";
 import { IconPicker, RoleIcon } from "@/components/RoleIcon";
+import { Loader } from "@/components/prompt-kit/loader";
+import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { formatRelativeTime } from "@/lib/formatRelativeTime";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
@@ -495,17 +497,17 @@ function CredentialItem({
   }
 
   async function reveal() {
-    const pw = await fetchPassword();
+    const [pw] = await Promise.all([fetchPassword(), new Promise((resolve) => window.setTimeout(resolve, 450))]);
     if (pw === null) return;
     setShown(pw);
     window.setTimeout(() => setShown(null), REVEAL_SECONDS * 1000);
   }
 
+  // Copy only works on a password that has been revealed; while it is blurred there is nothing to copy.
   async function copy() {
-    const pw = shown ?? (await fetchPassword());
-    if (pw === null) return;
+    if (shown === null) return;
     try {
-      await navigator.clipboard.writeText(pw);
+      await navigator.clipboard.writeText(shown);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch {
@@ -567,6 +569,10 @@ function CredentialItem({
               <>
                 {shown !== null ? (
                   <span className="min-w-0 truncate font-mono text-sm text-zinc-800 dark:text-zinc-100">{shown}</span>
+                ) : busy ? (
+                  <span role="status" className="min-w-0 truncate">
+                    <TextShimmer className="font-mono text-sm">Decrypting…</TextShimmer>
+                  </span>
                 ) : (
                   // Stand-in text, blurred. The real password is never in the page until Reveal fetches it.
                   <button
@@ -576,19 +582,27 @@ function CredentialItem({
                     title="Click to reveal"
                     aria-label="Reveal password"
                     className="min-w-0 cursor-pointer select-none truncate font-mono text-sm text-zinc-700 blur-[5px] transition hover:blur-[4px] dark:text-zinc-200"
+                    onCopy={(e) => e.preventDefault()}
                   >
                     {BLURRED_SAMPLE}
                   </button>
                 )}
                 <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
-                  {shown ? <EyeOff size={14} /> : <Eye size={14} />}
+                  {busy && shown === null ? <Loader size={14} /> : shown ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
                 {copied ? (
                   <span className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-green-600 dark:text-green-400" role="status">
                     <Check size={13} /> Copied!
                   </span>
                 ) : (
-                  <button type="button" className={ICON_BUTTON} onClick={copy} disabled={busy} aria-label="Copy password" title="Copy password">
+                  <button
+                    type="button"
+                    className={ICON_BUTTON}
+                    onClick={copy}
+                    disabled={shown === null}
+                    aria-label="Copy password"
+                    title={shown === null ? "Reveal the password first to copy it" : "Copy password"}
+                  >
                     <Copy size={14} />
                   </button>
                 )}
