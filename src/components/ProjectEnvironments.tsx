@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
+  Bookmark,
   CalendarClock,
   Check,
   ChevronDown,
@@ -39,6 +40,7 @@ import { Dropdown, type DropdownOption } from "@/components/ui/Dropdown";
 import { IconPicker, RoleIcon } from "@/components/RoleIcon";
 import { Loader } from "@/components/prompt-kit/loader";
 import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
+import { FILL_BOOKMARKLET, fillPayload } from "@/lib/fillBookmarklet";
 import { formatRelativeTime } from "@/lib/formatRelativeTime";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
@@ -518,23 +520,23 @@ function CredentialItem({
     }
   }
 
-  // Not an automatic sign-in: we can't type into another site's page. This copies the password (an audited Reveal),
-  // opens the app, and the person pastes it. The tab is opened after the copy because a new tab takes the focus the
-  // clipboard needs.
+  // We can't type into another site's page, so this copies the login (an audited Reveal) and opens the app; the
+  // one-time "Fill login" bookmark then fills the form from the clipboard. The tab is opened after the copy because a
+  // new tab takes the focus the clipboard needs.
   async function loginAndOpen() {
     setOpening(true);
     try {
       const pw = shown ?? (await fetchPassword());
       if (pw === null || !openUrl) return;
       try {
-        await navigator.clipboard.writeText(pw);
+        await navigator.clipboard.writeText(fillPayload(cred.username, pw));
       } catch {
         setError("Could not copy to the clipboard");
         return;
       }
       window.open(openUrl, "_blank", "noopener,noreferrer");
-      setNote(`Password copied. Sign in as ${cred.username} and paste it.`);
-      window.setTimeout(() => setNote(""), 10000);
+      setNote("Login copied. On the login page, click your “Fill login” bookmark (set it up with the Login fill button at the top).");
+      window.setTimeout(() => setNote(""), 15000);
     } finally {
       setOpening(false);
     }
@@ -1136,6 +1138,58 @@ function EnvironmentCard({
 // Section
 // ---------------------------------------------------------------------------------------------------------------
 
+/** One-time setup for "Login & open": a draggable bookmark that fills a login page from what was copied. */
+function FillLoginHelp() {
+  const link = useRef<HTMLAnchorElement>(null);
+  const [copied, setCopied] = useState(false);
+
+  // React refuses to render javascript: links, so the bookmark's address is set on the element directly.
+  useEffect(() => {
+    link.current?.setAttribute("href", FILL_BOOKMARKLET);
+  }, []);
+
+  async function copyCode() {
+    try {
+      await navigator.clipboard.writeText(FILL_BOOKMARKLET);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // clipboard blocked: the drag still works
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded-xl border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+      <p className="font-medium text-zinc-900 dark:text-zinc-100">Fill login pages with one click</p>
+      <ol className="list-decimal space-y-1.5 pl-5 text-zinc-600 dark:text-zinc-300">
+        <li>
+          Once: drag this button onto your bookmarks bar{" "}
+          <a
+            ref={link}
+            draggable
+            onClick={(e) => e.preventDefault()}
+            title="Drag me to the bookmarks bar"
+            className="mx-1 inline-flex cursor-grab items-center gap-1.5 rounded-md border border-dashed border-orange-400 px-2 py-0.5 text-xs font-medium text-orange-600 dark:text-orange-400"
+          >
+            <Bookmark size={12} /> Fill login
+          </a>{" "}
+          (or{" "}
+          <button type="button" onClick={copyCode} className="text-orange-600 underline dark:text-orange-400">
+            {copied ? "copied!" : "copy its code"}
+          </button>{" "}
+          and paste it as the address of a new bookmark).
+        </li>
+        <li>On a test user, click <strong>Login &amp; open</strong>. This copies the login and opens the app.</li>
+        <li>On the login page, click the <strong>Fill login</strong> bookmark. The username and password fill in and the copy is cleared.</li>
+      </ol>
+      <p className="text-xs text-zinc-400">
+        The bookmark holds no username or password. The first time, your browser may ask to let the page read the clipboard. On plain http pages it
+        asks you to paste instead.
+      </p>
+    </div>
+  );
+}
+
 export function ProjectEnvironments({
   projectId,
   initial,
@@ -1147,6 +1201,7 @@ export function ProjectEnvironments({
 }) {
   const [envs, setEnvs] = useState(initial);
   const [adding, setAdding] = useState(false);
+  const [showFill, setShowFill] = useState(false);
   const [error, setError] = useState("");
   const apiBase = `/api/projects/${projectId}/environments`;
 
@@ -1205,6 +1260,11 @@ export function ProjectEnvironments({
               </Button>
             </>
           )}
+          {canEdit && (
+            <Button variant="secondary" size="sm" icon={Bookmark} onClick={() => setShowFill((v) => !v)} title="Set up one-click filling of login pages">
+              Login fill
+            </Button>
+          )}
           {canEdit && !adding && (
             <Button variant="primary" size="sm" icon={Plus} onClick={() => setAdding(true)}>
               Add environment
@@ -1212,6 +1272,8 @@ export function ProjectEnvironments({
           )}
         </div>
       </div>
+
+      {showFill && canEdit && <FillLoginHelp />}
 
       {error && (
         <div className="flex items-start justify-between gap-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-500/10 dark:text-red-400">
