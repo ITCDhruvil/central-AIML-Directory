@@ -22,14 +22,14 @@ import { OwnerSelect } from "@/components/ui/OwnerSelect";
 import { Button } from "@/components/ui/Button";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { cn } from "@/lib/cn";
-import { STATUS_ICONS, TYPE_ICONS } from "@/lib/projectOptionIcons";
+import { STAGE_ICONS, STATUS_ICONS, TYPE_ICONS } from "@/lib/projectOptionIcons";
 import { hasInternalDeployment } from "@/lib/deploymentLabel";
 
 const TYPE_OPTIONS = PROJECT_TYPES.map((t) => ({ value: t, label: t, icon: TYPE_ICONS[t].icon, iconClassName: TYPE_ICONS[t].className }));
 const STATUS_OPTIONS = PROJECT_STATUSES.map((s) => ({ value: s, label: s, icon: STATUS_ICONS[s].icon, iconClassName: STATUS_ICONS[s].className }));
 const STAGE_OPTIONS = [
-  { value: "", label: "Not set" },
-  ...PROJECT_STAGES.map((s) => ({ value: s, label: s })),
+  { value: "", label: "Not set", icon: STAGE_ICONS.NOT_SET.icon, iconClassName: STAGE_ICONS.NOT_SET.className },
+  ...PROJECT_STAGES.map((s) => ({ value: s, label: s, icon: STAGE_ICONS[s].icon, iconClassName: STAGE_ICONS[s].className })),
 ];
 
 function toCsv(values: string[]): string {

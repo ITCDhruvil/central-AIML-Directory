@@ -1,4 +1,4 @@
-export const TEXT_TRANSFORM_ACTIONS = ["improve", "fix-grammar", "shorten", "lengthen", "tone", "translate"] as const;
+export const TEXT_TRANSFORM_ACTIONS = ["improve", "fix-grammar", "shorten", "lengthen", "tone", "translate", "title"] as const;
 export type TextTransformAction = (typeof TEXT_TRANSFORM_ACTIONS)[number];
 
 export const TEXT_TRANSFORM_TONES = ["professional", "casual", "confident", "friendly"] as const;
@@ -41,6 +41,8 @@ const ACTION_INSTRUCTIONS: Record<TextTransformAction, string> = {
   lengthen:
     "Expand with more detail and explanation, elaborating on points that are only briefly mentioned. Do not invent new facts, features, or claims that aren't implied by the original text.",
   tone: "Rewrite in the requested tone (given below) without changing the underlying facts or structure.",
+  title:
+    "Do NOT rewrite the text. Instead write ONE short, specific title for it: 2 to 6 words, plain text only (no Markdown, no quotes, no trailing punctuation), naming what the text is about. Put the title in the \"text\" field.",
   translate:
     "Translate the text into the requested language (given below). Keep the Markdown structure (headings, bold, bullet lists, code spans) intact — translate the prose, not code identifiers, URLs, or inline code content.",
 };

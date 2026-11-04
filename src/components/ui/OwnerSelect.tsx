@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, CornerDownLeft, Loader2, Plus, Trash2, User } from "lucide-react";
+import { PersonAvatar } from "@/components/PeopleProvider";
 import { cn } from "@/lib/cn";
 import { useClickOutside } from "@/lib/useClickOutside";
 import type { Owner } from "@/types/owner";
@@ -199,7 +200,7 @@ export function OwnerSelect({
         )}
       >
         <span className="flex min-w-0 items-center gap-2 truncate">
-          <User size={14} className="shrink-0 text-zinc-400" />
+          {value ? <PersonAvatar name={value} size={20} /> : <User size={14} className="shrink-0 text-zinc-400" />}
           <span className={cn("truncate", !value && "text-zinc-400")}>{selectedLabel}</span>
         </span>
         <ChevronDown size={14} className={cn("shrink-0 text-zinc-400 transition-transform", open && "rotate-180")} />
@@ -230,13 +231,14 @@ export function OwnerSelect({
                     onMouseEnter={() => setHighlighted(i)}
                     onClick={() => choose(option.name)}
                     className={cn(
-                      "group flex cursor-pointer items-center gap-2 px-3 py-1.5",
+                      "group flex cursor-pointer items-center gap-2 px-3 py-1.5 text-left",
                       isSelected
                         ? "bg-orange-50 font-medium text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
                         : "text-zinc-700 dark:text-zinc-200",
                       i === highlighted && !isSelected && "bg-zinc-100 dark:bg-zinc-800",
                     )}
                   >
+                    {option.name ? <PersonAvatar name={option.name} size={22} /> : <User size={16} className="shrink-0 text-zinc-400" />}
                     <span className={cn("min-w-0 flex-1 truncate", !option.name && "text-zinc-400")}>
                       {option.name || "No owner"}
                     </span>

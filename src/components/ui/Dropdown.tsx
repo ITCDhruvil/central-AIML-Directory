@@ -150,7 +150,7 @@ export function Dropdown({
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => choose(i)}
                 className={cn(
-                  "flex cursor-pointer items-center gap-2 px-3 py-1.5",
+                  "flex cursor-pointer items-center gap-2 px-3 py-1.5 text-left",
                   isSelected
                     ? "font-medium text-orange-600 dark:text-orange-400"
                     : "text-zinc-700 dark:text-zinc-200",
@@ -159,7 +159,7 @@ export function Dropdown({
                 )}
               >
                 {OptionIcon && (
-                  <OptionIcon size={14} className={cn("shrink-0", !isSelected && (option.iconClassName ?? "text-zinc-400"))} />
+                  <OptionIcon size={14} className={cn("shrink-0", option.iconClassName ?? "text-zinc-400")} />
                 )}
                 <span className="flex-1 truncate">{option.label}</span>
                 {isSelected && <Check size={14} className="shrink-0" />}

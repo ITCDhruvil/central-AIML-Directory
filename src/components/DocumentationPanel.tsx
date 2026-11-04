@@ -7,12 +7,16 @@ import { ArrowDown, ArrowUp, CheckSquare, ChevronsUpDown, Download, Eye, FileTex
 import { useCan } from "@/components/AuthProvider";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FileTypeTile } from "@/components/FileTypeTile";
+import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/Button";
+import { FilterMenu, type FilterOption, type FilterSection } from "@/components/ui/FilterMenu";
+import { Pagination } from "@/components/ui/Pagination";
 import { cn } from "@/lib/cn";
 import { documentCategoryLabel, documentSourceLabel, isDeletableDocument, isEditableDocument } from "@/lib/documentOwnership";
-import { KIND_TONE, fileKindOf } from "@/lib/fileKind";
+import { KIND_TONE, fileKindOf, type FileKind } from "@/lib/fileKind";
 import { formatDate } from "@/lib/formatDate";
 import { uploadDocumentFile } from "@/lib/uploadClient";
+import { usePagination } from "@/lib/usePagination";
 import { displayTitle, fileExtension, formatFileSize } from "@/lib/uploadFile";
 import { UPLOAD_SOURCE, type DocumentFileInfo } from "@/types/documentation";
 
@@ -26,13 +30,27 @@ export interface DocumentRow {
   updatedAt: string;
 }
 
-const FILTERS = [
-  { id: "all", label: "All" },
-  { id: "github", label: "Repository" },
-  { id: "generated", label: "Generated" },
-  { id: "manual", label: "Written" },
-  { id: UPLOAD_SOURCE, label: "Uploaded" },
-] as const;
+const PAGE_SIZE = 10;
+
+const SOURCE_OPTIONS: FilterOption[] = [
+  { value: "github", label: "Repository" },
+  { value: "generated", label: "Generated" },
+  { value: "manual", label: "Written" },
+  { value: UPLOAD_SOURCE, label: "Uploaded" },
+];
+
+const KIND_LABEL: Record<FileKind, string> = {
+  pdf: "PDF",
+  spreadsheet: "Spreadsheet",
+  document: "Word document",
+  markdown: "Markdown",
+  text: "Text",
+  presentation: "Presentation",
+  image: "Image",
+  archive: "Archive",
+  code: "Code / data",
+  other: "Other",
+};
 
 type SortKey = "name" | "type" | "size" | "date";
 
@@ -57,6 +75,20 @@ function SortHead({ id, label, sort, onToggle }: { id: SortKey; label: string; s
       <Icon size={12} />
     </button>
   );
+}
+
+const SORT_PRESETS: { value: string; label: string; sort: Sort }[] = [
+  { value: "", label: "Default order", sort: null },
+  { value: "date-desc", label: "Newest first", sort: { key: "date", dir: "desc" } },
+  { value: "date-asc", label: "Oldest first", sort: { key: "date", dir: "asc" } },
+  { value: "name-asc", label: "Name A–Z", sort: { key: "name", dir: "asc" } },
+  { value: "name-desc", label: "Name Z–A", sort: { key: "name", dir: "desc" } },
+  { value: "size-desc", label: "Largest first", sort: { key: "size", dir: "desc" } },
+  { value: "size-asc", label: "Smallest first", sort: { key: "size", dir: "asc" } },
+];
+
+function sortToPreset(sort: Sort): string {
+  return SORT_PRESETS.find((p) => p.sort?.key === sort?.key && p.sort?.dir === sort?.dir)?.value ?? "";
 }
 
 /** What a row's type column shows: the file extension for uploads, MD for written / synced Markdown documents. */
@@ -87,7 +119,9 @@ export function DocumentationPanel({
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
-  const [filter, setFilter] = useState<string>("all");
+  const [query, setQuery] = useState("");
+  const [kinds, setKinds] = useState<string[]>([]);
+  const [sources, setSources] = useState<string[]>([]);
   const [sort, setSort] = useState<Sort>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -101,12 +135,24 @@ export function DocumentationPanel({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const present = new Set(documents.map((d) => d.source));
-  const filters = FILTERS.filter((f) => f.id === "all" || present.has(f.id));
-  const activeFilter = filters.some((f) => f.id === filter) ? filter : "all";
+  const kindOf = (d: DocumentRow): FileKind => fileKindOf(typeOf(d).ext, d.file?.contentType);
+
+  // Only the types and sources that actually occur are offered as filters.
+  const kindOptions: FilterOption[] = useMemo(() => {
+    const present = new Set(documents.map(kindOf));
+    return (Object.keys(KIND_LABEL) as FileKind[]).filter((k) => present.has(k)).map((k) => ({ value: k, label: KIND_LABEL[k] }));
+  }, [documents]);
+  const sourceOptions = SOURCE_OPTIONS.filter((o) => documents.some((d) => d.source === o.value));
 
   const visible = useMemo(() => {
-    const list = activeFilter === "all" ? documents : documents.filter((d) => d.source === activeFilter);
+    const q = query.trim().toLowerCase();
+    const list = documents.filter((d) => {
+      if (sources.length > 0 && !sources.includes(d.source)) return false;
+      if (kinds.length > 0 && !kinds.includes(kindOf(d))) return false;
+      if (!q) return true;
+      const haystack = [displayTitle(d.title, d.file), d.file?.name, typeOf(d).label, documentSourceLabel(d.source), documentCategoryLabel(d.category)];
+      return haystack.some((text) => text?.toLowerCase().includes(q));
+    });
     if (!sort) return list;
     const sign = sort.dir === "asc" ? 1 : -1;
     const compare: Record<SortKey, (a: DocumentRow, b: DocumentRow) => number> = {
@@ -116,10 +162,12 @@ export function DocumentationPanel({
       date: (a, b) => new Date(dateOf(a)).getTime() - new Date(dateOf(b)).getTime(),
     };
     return [...list].sort((a, b) => sign * compare[sort.key](a, b));
-  }, [documents, activeFilter, sort]);
+  }, [documents, query, kinds, sources, sort]);
+
+  const { pageItems, page, setPage, totalPages } = usePagination(visible, PAGE_SIZE);
 
   // Only written and uploaded documents can be deleted; synced and generated ones are managed by the sync.
-  const deletable = visible.filter((d) => isDeletableDocument(d.source));
+  const deletable = pageItems.filter((d) => isDeletableDocument(d.source));
   const canSelect = canDelete && documents.some((d) => isDeletableDocument(d.source));
   const allSelected = deletable.length > 0 && deletable.every((d) => selected.has(d.id));
 
@@ -210,6 +258,31 @@ export function DocumentationPanel({
       }
     : {};
 
+  const filterSections: FilterSection[] = [
+    ...(kindOptions.length > 1
+      ? [{ id: "type", label: "Type", kind: "multi" as const, options: kindOptions, selected: kinds, onChange: (v: string[]) => { setKinds(v); setPage(1); }, allLabel: "All types" }]
+      : []),
+    ...(sourceOptions.length > 1
+      ? [{ id: "source", label: "Source", kind: "multi" as const, options: sourceOptions, selected: sources, onChange: (v: string[]) => { setSources(v); setPage(1); }, allLabel: "All sources" }]
+      : []),
+    {
+      id: "sort",
+      label: "Sort by",
+      kind: "single",
+      options: SORT_PRESETS.map((p) => ({ value: p.value, label: p.label })),
+      selected: sortToPreset(sort),
+      onChange: (v: string) => setSort(SORT_PRESETS.find((p) => p.value === v)?.sort ?? null),
+      fallbackLabel: "Custom",
+    },
+  ];
+  const activeFilterCount = (kinds.length > 0 ? 1 : 0) + (sources.length > 0 ? 1 : 0);
+
+  function clearFilters() {
+    setKinds([]);
+    setSources([]);
+    setPage(1);
+  }
+
   return (
     <section
       {...dropProps}
@@ -294,23 +367,19 @@ export function DocumentationPanel({
         </div>
       )}
 
-      {filters.length > 2 && (
-        <div className="flex flex-wrap gap-1.5 px-5 pb-3">
-          {filters.map((f) => (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className={cn(
-                "rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
-                activeFilter === f.id
-                  ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-                  : "text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800",
-              )}
-            >
-              {f.label}
-            </button>
-          ))}
+      {documents.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 px-5 pb-4">
+          <div className="w-full sm:w-72">
+            <SearchInput
+              value={query}
+              onChange={(value) => {
+                setQuery(value);
+                setPage(1);
+              }}
+              placeholder="Search documents..."
+            />
+          </div>
+          <FilterMenu sections={filterSections} activeCount={activeFilterCount} onClear={clearFilters} />
         </div>
       )}
 
@@ -341,7 +410,7 @@ export function DocumentationPanel({
           </div>
 
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
-            {visible.map((doc) => {
+            {pageItems.map((doc) => {
               const { ext, label } = typeOf(doc);
               const kind = fileKindOf(ext, doc.file?.contentType);
               const canPick = isDeletableDocument(doc.source);
@@ -442,6 +511,29 @@ export function DocumentationPanel({
               );
             })}
           </ul>
+
+          {visible.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 border-t border-zinc-100 px-5 py-12 text-center dark:border-zinc-800">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">No documents match your search or filters.</p>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setQuery("");
+                  clearFilters();
+                }}
+              >
+                Clear search and filters
+              </Button>
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-zinc-100 px-5 py-3 dark:border-zinc-800">
+              <span className="text-xs tabular-nums text-zinc-400">
+                Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, visible.length)} of {visible.length}
+              </span>
+              <Pagination page={page} totalPages={totalPages} onPageChange={setPage} />
+            </div>
+          )}
         </div>
       )}
 

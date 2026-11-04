@@ -9,7 +9,7 @@ import { OwnerSelect } from "@/components/ui/OwnerSelect";
 import { ProjectStatusBadge } from "@/components/ProjectStatusBadge";
 import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/formatDate";
-import { STATUS_ICONS, TYPE_ICONS } from "@/lib/projectOptionIcons";
+import { STATUS_ICONS, TYPE_ICONS, STAGE_ICONS } from "@/lib/projectOptionIcons";
 import { saveProjectFields } from "@/lib/saveProjectFields";
 import { PersonAvatar } from "@/components/PeopleProvider";
 import {
@@ -23,7 +23,7 @@ import {
 } from "@/types/project";
 
 const INLINE_TRIGGER =
-  "flex w-full min-w-[11rem] items-center justify-between gap-2 rounded-md border border-orange-400 bg-white px-2 py-1 text-left text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/40 dark:bg-zinc-900";
+  "flex w-full min-w-[11rem] items-center justify-between gap-2 rounded-md border border-orange-400 bg-white px-2 py-1 text-left text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-orange-500/40 dark:bg-zinc-900 dark:text-zinc-100";
 
 const TYPE_OPTIONS: DropdownOption[] = PROJECT_TYPES.map((t) => ({
   value: t,
@@ -40,9 +40,19 @@ const STATUS_OPTIONS: DropdownOption[] = PROJECT_STATUSES.map((s) => ({
 }));
 
 const STAGE_OPTIONS: DropdownOption[] = [
-  { value: "", label: "Not set" },
-  ...PROJECT_STAGES.map((s) => ({ value: s, label: s })),
+  { value: "", label: "Not set", icon: STAGE_ICONS.NOT_SET.icon, iconClassName: STAGE_ICONS.NOT_SET.className },
+  ...PROJECT_STAGES.map((s) => ({ value: s, label: s, icon: STAGE_ICONS[s].icon, iconClassName: STAGE_ICONS[s].className })),
 ];
+
+/** A value with the icon of the chosen option in front of it (the row's own label icon is left as it is). */
+function ValueWithIcon({ icon: Icon, className, children }: { icon: ComponentType<{ size?: number; className?: string }>; className: string; children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <Icon size={14} className={`shrink-0 ${className}`} />
+      {children}
+    </span>
+  );
+}
 
 function DetailsRow({
   icon: Icon,
@@ -146,7 +156,9 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
           />
         ) : (
           <ValueButton label="Project Type" onClick={() => requestEdit("type")}>
-            {local.type}
+            <ValueWithIcon icon={TYPE_ICONS[local.type].icon} className={TYPE_ICONS[local.type].className}>
+              {local.type}
+            </ValueWithIcon>
           </ValueButton>
         )}
       </DetailsRow>
@@ -172,7 +184,9 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
           />
         ) : (
           <ValueButton label="Status" onClick={() => requestEdit("status")}>
-            <ProjectStatusBadge status={local.status} />
+            <ValueWithIcon icon={STATUS_ICONS[local.status].icon} className={STATUS_ICONS[local.status].className}>
+              <ProjectStatusBadge status={local.status} />
+            </ValueWithIcon>
           </ValueButton>
         )}
       </DetailsRow>
@@ -199,7 +213,9 @@ export function ProjectDetailsEditor({ project }: { project: Project }) {
           />
         ) : (
           <ValueButton label="Stage" muted={!local.stage} onClick={() => requestEdit("stage")}>
-            {local.stage ?? "Not set"}
+            <ValueWithIcon icon={STAGE_ICONS[local.stage ?? "NOT_SET"].icon} className={STAGE_ICONS[local.stage ?? "NOT_SET"].className}>
+              {local.stage ?? "Not set"}
+            </ValueWithIcon>
           </ValueButton>
         )}
       </DetailsRow>

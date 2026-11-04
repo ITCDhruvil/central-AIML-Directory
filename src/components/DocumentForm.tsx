@@ -11,12 +11,16 @@ import {
   ListChecks,
   MoreHorizontal,
   Palette,
+  Sparkles,
   StickyNote,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
 import { MANUAL_DOCUMENT_CATEGORIES, type DocumentCategory } from "@/types/documentation";
+import { useCan } from "@/components/AuthProvider";
+import { Loader } from "@/components/prompt-kit/loader";
 import { Dropdown } from "@/components/ui/Dropdown";
+import { cleanTitle } from "@/lib/ai/cleanTitle";
 import { Button } from "@/components/ui/Button";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 
@@ -57,6 +61,40 @@ export function DocumentForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  const canUseAi = useCan("ai_text_transform", "use");
+  const [titling, setTitling] = useState(false);
+  const [titleHint, setTitleHint] = useState<string | null>(null);
+
+  // Writes a short title from the content. With no content there is nothing to go on, so it asks for some first.
+  async function suggestTitle() {
+    if (titling) return;
+    if (!content.trim()) {
+      setTitleHint("Please add some content first.");
+      return;
+    }
+    setTitling(true);
+    setTitleHint(null);
+    try {
+      const res = await fetch("/api/ai/transform-text", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "title", text: content }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setTitleHint(body.error ?? "Could not write a title. Please try again.");
+        return;
+      }
+      const suggested = cleanTitle(typeof body.text === "string" ? body.text : "");
+      if (suggested) setTitle(suggested);
+      else setTitleHint("Could not write a title. Please try again.");
+    } catch {
+      setTitleHint("Network error — please try again.");
+    } finally {
+      setTitling(false);
+    }
+  }
 
   const dirty =
     title !== (document?.title ?? "") || category !== (document?.category ?? "NOTES") || content !== (document?.content ?? "");
@@ -107,13 +145,35 @@ export function DocumentForm({
           <label htmlFor="doc-title" className={LABEL}>
             Title
           </label>
-          <input
-            id="doc-title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="Untitled document"
-            className="mt-1.5 w-full border-0 border-b border-zinc-200 bg-transparent px-0 pb-2 text-xl font-semibold tracking-tight text-zinc-900 placeholder:text-zinc-300 focus:border-orange-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-600"
-          />
+          <div className="relative mt-1.5">
+            <input
+              id="doc-title"
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
+                setTitleHint(null);
+              }}
+              placeholder="Untitled document"
+              className={`w-full border-0 border-b border-zinc-200 bg-transparent px-0 pb-2 text-xl font-semibold tracking-tight text-zinc-900 placeholder:text-zinc-300 focus:border-orange-500 focus:outline-none dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-600 ${canUseAi ? "pr-10" : ""}`}
+            />
+            {canUseAi && (
+              <button
+                type="button"
+                onClick={() => void suggestTitle()}
+                disabled={titling}
+                aria-label="Write a title with AI"
+                title="Write a short title from the content with AI"
+                className="absolute bottom-1.5 right-0 flex h-7 w-7 items-center justify-center rounded-md text-orange-600 transition-colors hover:bg-orange-50 disabled:cursor-wait dark:text-orange-400 dark:hover:bg-orange-500/10"
+              >
+                {titling ? <Loader size={16} /> : <Sparkles size={16} />}
+              </button>
+            )}
+          </div>
+          {titleHint && (
+            <p role="status" className="mt-1.5 text-xs text-amber-600 dark:text-amber-400">
+              {titleHint}
+            </p>
+          )}
           {errors.title && <p className="mt-1 text-xs text-red-600">{errors.title}</p>}
         </div>
 

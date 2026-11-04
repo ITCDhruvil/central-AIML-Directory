@@ -1132,7 +1132,7 @@ export function ProjectEnvironments({
             isFirst={i === 0}
             isLast={i === envs.length - 1}
             takenNames={takenNames}
-            defaultOpen
+            defaultOpen={false}
             run={run}
             onMove={(d) => move(i, d)}
           />

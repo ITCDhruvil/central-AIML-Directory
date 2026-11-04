@@ -57,6 +57,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
+import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { cn } from "@/lib/cn";
 import { cleanPastedHtml } from "@/lib/cleanPastedHtml";
 import { useClickOutside } from "@/lib/useClickOutside";
@@ -620,7 +621,17 @@ function AiSubmenuRow({
 }
 
 /** "Improve description" + a menu of other AI rewrites (fix grammar, shorten, lengthen, tone) — all opt-in, one click each, applied through the editor's own undo history. */
-function AiMenu({ editor }: { editor: Editor }) {
+const BUSY_LABEL: Record<TextTransformAction, string> = {
+  improve: "Improving your content…",
+  "fix-grammar": "Fixing spelling and grammar…",
+  shorten: "Making it shorter…",
+  lengthen: "Making it longer…",
+  tone: "Changing the tone…",
+  translate: "Translating…",
+  title: "Writing a title…",
+};
+
+function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null) => void }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -635,6 +646,7 @@ function AiMenu({ editor }: { editor: Editor }) {
 
     setOpen(false);
     setLoading(true);
+    onBusy(BUSY_LABEL[action]);
     setError(null);
     try {
       const res = await fetch("/api/ai/transform-text", {
@@ -653,6 +665,7 @@ function AiMenu({ editor }: { editor: Editor }) {
       setError("Network error — please try again");
     } finally {
       setLoading(false);
+      onBusy(null);
     }
   }
 
@@ -713,10 +726,10 @@ function AiMenu({ editor }: { editor: Editor }) {
   );
 }
 
-function Toolbar({ editor }: { editor: Editor }) {
+function Toolbar({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-zinc-50 px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-950">
-      <AiMenu editor={editor} />
+      <AiMenu editor={editor} onBusy={onBusy} />
 
       <ToolbarDivider />
 
@@ -787,6 +800,9 @@ export function RichTextEditor({
   placeholder?: string;
   className?: string;
 }) {
+  // Set while an AI action is rewriting the text: shows the status over the text area and blocks typing meanwhile.
+  const [busy, setBusy] = useState<string | null>(null);
+
   const editor = useEditor({
     extensions: [
       // StarterKit v3 bundles link and underline; they are registered separately below with our options.
@@ -826,13 +842,27 @@ export function RichTextEditor({
     }
   }, [value, editor]);
 
+  useEffect(() => {
+    editor?.setEditable(!busy);
+  }, [busy, editor]);
+
   return (
     <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
-      {editor && <Toolbar editor={editor} />}
-      <EditorContent
-        editor={editor}
-        className="min-h-0 flex-1 overflow-y-auto [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:h-full"
-      />
+      {editor && <Toolbar editor={editor} onBusy={setBusy} />}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <EditorContent
+          editor={editor}
+          className={cn(
+            "min-h-0 flex-1 overflow-y-auto transition-opacity [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:h-full",
+            busy && "opacity-40",
+          )}
+        />
+        {busy && (
+          <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-[1.5px]">
+            <TextShimmer className="text-base font-medium">{busy}</TextShimmer>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
