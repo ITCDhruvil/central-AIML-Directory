@@ -17,6 +17,8 @@
     "db:seed-spark": "tsx prisma/seed-spark.ts"
   },
   "dependencies": {
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "@tiptap/extension-image": "^3.31.3",

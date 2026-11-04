@@ -2,8 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, Loader2, Maximize2, Minimize2, Trash2 } from "lucide-react";
+import { Camera, Loader2, Maximize2, Minimize2, Smile, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/Avatar";
+import { AvatarGallery } from "@/components/settings/AvatarGallery";
 import { Button } from "@/components/ui/Button";
 import { AVATAR_SIZE_PX } from "@/lib/avatar";
 import {
@@ -33,6 +34,7 @@ export function AvatarEditor({ user, name }: { user: AuthUser; name: string }) {
   const router = useRouter();
   const input = useRef<HTMLInputElement>(null);
   const [picture, setPicture] = useState<LoadedPicture | null>(null);
+  const [gallery, setGallery] = useState(false);
   const [crop, setCrop] = useState<Crop>({ zoom: 1, x: 0, y: 0 });
   const [busy, setBusy] = useState<"preparing" | "saving" | "removing" | null>(
     null,
@@ -301,6 +303,20 @@ export function AvatarEditor({ user, name }: { user: AuthUser; name: string }) {
     );
   }
 
+  // ---- pick a ready-made avatar
+  if (gallery) {
+    return (
+      <AvatarGallery
+        name={name}
+        onCancel={() => setGallery(false)}
+        onSaved={() => {
+          setGallery(false);
+          setMessage({ kind: "ok", text: "Profile picture updated." });
+        }}
+      />
+    );
+  }
+
   // ---- normal state
   return (
     <div className="flex items-center gap-4">
@@ -322,6 +338,18 @@ export function AvatarEditor({ user, name }: { user: AuthUser; name: string }) {
                 ? "Change photo"
                 : "Upload photo"}
           </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={Smile}
+            disabled={busy !== null}
+            onClick={() => {
+              setMessage(null);
+              setGallery(true);
+            }}
+          >
+            Choose avatar
+          </Button>
           {hasPicture && (
             <Button
               variant="ghost"
@@ -335,7 +363,7 @@ export function AvatarEditor({ user, name }: { user: AuthUser; name: string }) {
           )}
         </div>
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          JPEG, PNG or WebP. You can position and zoom it before saving.
+          Upload a JPEG, PNG or WebP photo and position it, or choose a ready-made avatar.
         </p>
         {status}
       </div>
