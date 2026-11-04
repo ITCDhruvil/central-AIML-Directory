@@ -274,6 +274,8 @@ export default async function ProjectDetailPage({
         category: doc.category,
         source: doc.source,
         file: doc.file ?? null,
+        createdAt: doc.createdAt,
+        updatedAt: doc.updatedAt,
       }))}
     />
   );

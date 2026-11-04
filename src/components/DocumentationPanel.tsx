@@ -1,14 +1,17 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CheckSquare, ChevronRight, Download, File as FileIcon, FileImage, FileText, Plus, Trash2, Upload, X } from "lucide-react";
+import { ArrowDown, ArrowUp, CheckSquare, ChevronsUpDown, Download, Eye, FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { useCan } from "@/components/AuthProvider";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { FileTypeTile } from "@/components/FileTypeTile";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
-import { documentCategoryLabel, documentSourceLabel, isDeletableDocument } from "@/lib/documentOwnership";
+import { documentCategoryLabel, documentSourceLabel, isDeletableDocument, isEditableDocument } from "@/lib/documentOwnership";
+import { KIND_TONE, fileKindOf } from "@/lib/fileKind";
+import { formatDate } from "@/lib/formatDate";
 import { uploadDocumentFile } from "@/lib/uploadClient";
 import { displayTitle, fileExtension, formatFileSize } from "@/lib/uploadFile";
 import { UPLOAD_SOURCE, type DocumentFileInfo } from "@/types/documentation";
@@ -19,6 +22,8 @@ export interface DocumentRow {
   category: string;
   source: string;
   file: DocumentFileInfo | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 const FILTERS = [
@@ -29,29 +34,46 @@ const FILTERS = [
   { id: UPLOAD_SOURCE, label: "Uploaded" },
 ] as const;
 
-function RowIcon({ doc }: { doc: DocumentRow }) {
-  const type = doc.file?.contentType ?? "";
-  const Icon = type.startsWith("image/")
-    ? FileImage
-    : doc.file && fileExtension(doc.file.name) !== "pdf"
-      ? FileIcon
-      : FileText;
+type SortKey = "name" | "type" | "size" | "date";
+
+// Name | Type | Size | Date | Actions. Type, size and date drop out on small screens (the name cell shows them instead).
+const GRID = "md:grid md:grid-cols-[minmax(0,1fr)_5rem_5rem_7rem_8.5rem] md:items-center md:gap-4";
+
+type Sort = { key: SortKey; dir: "asc" | "desc" } | null;
+
+function SortHead({ id, label, sort, onToggle }: { id: SortKey; label: string; sort: Sort; onToggle: (key: SortKey) => void }) {
+  const active = sort?.key === id;
+  const Icon = !active ? ChevronsUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-      <Icon size={16} />
-    </span>
+    <button
+      type="button"
+      onClick={() => onToggle(id)}
+      className={cn(
+        "inline-flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider transition-colors",
+        active ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200",
+      )}
+    >
+      {label}
+      <Icon size={12} />
+    </button>
   );
 }
 
-function meta(doc: DocumentRow): string {
-  const parts = [documentSourceLabel(doc.source)];
+/** What a row's type column shows: the file extension for uploads, MD for written / synced Markdown documents. */
+function typeOf(doc: DocumentRow): { ext: string; label: string } {
   if (doc.file) {
-    const ext = fileExtension(doc.file.name).toUpperCase();
-    parts.push(ext ? `${ext} · ${formatFileSize(doc.file.size)}` : formatFileSize(doc.file.size));
-  } else if (doc.category !== "OTHER") {
-    parts.push(documentCategoryLabel(doc.category));
+    const ext = fileExtension(doc.file.name);
+    return { ext, label: ext ? ext.toUpperCase() : "FILE" };
   }
-  return parts.join(" · ");
+  return { ext: "md", label: "MD" };
+}
+
+function dateOf(doc: DocumentRow): string {
+  return doc.file ? doc.createdAt : doc.updatedAt;
+}
+
+function sizeOf(doc: DocumentRow): number {
+  return doc.file?.size ?? -1;
 }
 
 export function DocumentationPanel({
@@ -66,12 +88,14 @@ export function DocumentationPanel({
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<string>("all");
+  const [sort, setSort] = useState<Sort>(null);
   const [dragging, setDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [added, setAdded] = useState(0);
   const [removed, setRemoved] = useState(0);
   const canDelete = useCan("documents", "delete");
+  const canEdit = useCan("documents", "edit");
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -80,12 +104,28 @@ export function DocumentationPanel({
   const present = new Set(documents.map((d) => d.source));
   const filters = FILTERS.filter((f) => f.id === "all" || present.has(f.id));
   const activeFilter = filters.some((f) => f.id === filter) ? filter : "all";
-  const visible = activeFilter === "all" ? documents : documents.filter((d) => d.source === activeFilter);
+
+  const visible = useMemo(() => {
+    const list = activeFilter === "all" ? documents : documents.filter((d) => d.source === activeFilter);
+    if (!sort) return list;
+    const sign = sort.dir === "asc" ? 1 : -1;
+    const compare: Record<SortKey, (a: DocumentRow, b: DocumentRow) => number> = {
+      name: (a, b) => displayTitle(a.title, a.file).localeCompare(displayTitle(b.title, b.file), undefined, { numeric: true, sensitivity: "base" }),
+      type: (a, b) => typeOf(a).label.localeCompare(typeOf(b).label),
+      size: (a, b) => sizeOf(a) - sizeOf(b),
+      date: (a, b) => new Date(dateOf(a)).getTime() - new Date(dateOf(b)).getTime(),
+    };
+    return [...list].sort((a, b) => sign * compare[sort.key](a, b));
+  }, [documents, activeFilter, sort]);
 
   // Only written and uploaded documents can be deleted; synced and generated ones are managed by the sync.
   const deletable = visible.filter((d) => isDeletableDocument(d.source));
   const canSelect = canDelete && documents.some((d) => isDeletableDocument(d.source));
   const allSelected = deletable.length > 0 && deletable.every((d) => selected.has(d.id));
+
+  function toggleSort(key: SortKey) {
+    setSort((prev) => (prev?.key !== key ? { key, dir: "asc" } : prev.dir === "asc" ? { key, dir: "desc" } : null));
+  }
 
   function exitSelecting() {
     setSelecting(false);
@@ -205,19 +245,13 @@ export function DocumentationPanel({
             )}
             {canCreate && (
               <>
-            <input
-              ref={inputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => void upload(e.target.files)}
-            />
-            <Button size="sm" icon={Upload} loading={uploading} onClick={() => inputRef.current?.click()}>
-              {uploading ? "Uploading" : "Upload"}
-            </Button>
-            <Button size="sm" variant="primary" icon={Plus} href={`/projects/${projectId}/documents/new`}>
-              New
-            </Button>
+                <input ref={inputRef} type="file" multiple className="hidden" onChange={(e) => void upload(e.target.files)} />
+                <Button size="sm" icon={Upload} loading={uploading} onClick={() => inputRef.current?.click()}>
+                  {uploading ? "Uploading" : "Upload"}
+                </Button>
+                <Button size="sm" variant="primary" icon={Plus} href={`/projects/${projectId}/documents/new`}>
+                  New
+                </Button>
               </>
             )}
           </div>
@@ -296,61 +330,119 @@ export function DocumentationPanel({
           </button>
         </div>
       ) : (
-        <ul className="divide-y divide-zinc-100 border-t border-zinc-100 dark:divide-zinc-800 dark:border-zinc-800">
-          {visible.map((doc) => {
-            const canPick = isDeletableDocument(doc.source);
-            const picked = selected.has(doc.id);
-            const inner = (
-              <>
-                <RowIcon doc={doc} />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{displayTitle(doc.title, doc.file)}</span>
-                  <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{meta(doc)}</span>
-                </span>
-              </>
-            );
+        <div className="border-t border-zinc-100 dark:border-zinc-800">
+          {/* Column headings (wide screens) */}
+          <div className={cn("hidden border-b border-zinc-100 px-5 py-2.5 dark:border-zinc-800", GRID, selecting && "md:pl-12")}>
+            <SortHead id="name" label="Name" sort={sort} onToggle={toggleSort} />
+            <SortHead id="type" label="Type" sort={sort} onToggle={toggleSort} />
+            <SortHead id="size" label="Size" sort={sort} onToggle={toggleSort} />
+            <SortHead id="date" label="Date" sort={sort} onToggle={toggleSort} />
+            <span className="text-right text-[11px] font-medium uppercase tracking-wider text-zinc-400">Actions</span>
+          </div>
 
-            if (selecting) {
+          <ul className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {visible.map((doc) => {
+              const { ext, label } = typeOf(doc);
+              const kind = fileKindOf(ext, doc.file?.contentType);
+              const canPick = isDeletableDocument(doc.source);
+              const picked = selected.has(doc.id);
+              const title = displayTitle(doc.title, doc.file);
+              const detailHref = `/projects/${projectId}/documents/${doc.id}`;
+              const sub = doc.file
+                ? documentSourceLabel(doc.source)
+                : [documentSourceLabel(doc.source), doc.category !== "OTHER" ? documentCategoryLabel(doc.category) : null].filter(Boolean).join(" · ");
+              const compact = [label, doc.file ? formatFileSize(doc.file.size) : null, formatDate(dateOf(doc))].filter(Boolean).join(" · ");
+
+              const nameCell = (
+                <span className="flex min-w-0 items-center gap-3">
+                  <FileTypeTile extension={ext} contentType={doc.file?.contentType} size={36} />
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
+                    <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="md:hidden">{compact}</span>
+                      <span className="hidden md:inline">{sub}</span>
+                    </span>
+                  </span>
+                </span>
+              );
+
+              const cells = (
+                <>
+                  <span className="hidden md:block">
+                    <span className={cn("inline-flex rounded-md px-1.5 py-0.5 text-[11px] font-semibold", KIND_TONE[kind])}>{label}</span>
+                  </span>
+                  <span className="hidden text-xs tabular-nums text-zinc-500 dark:text-zinc-400 md:block">{doc.file ? formatFileSize(doc.file.size) : "—"}</span>
+                  <span className="hidden text-xs text-zinc-500 dark:text-zinc-400 md:block" title={doc.file ? "Added" : "Last updated"}>
+                    {formatDate(dateOf(doc))}
+                  </span>
+                </>
+              );
+
+              if (selecting) {
+                return (
+                  <li key={doc.id} className={cn("flex items-center gap-3 px-5 py-3", picked && "bg-orange-50/60 dark:bg-orange-500/5", !canPick && "opacity-50")}>
+                    <input
+                      type="checkbox"
+                      checked={picked}
+                      disabled={!canPick}
+                      onChange={() => toggle(doc.id)}
+                      aria-label={`Select ${title}`}
+                      title={canPick ? undefined : "Synced and generated documents can't be deleted here"}
+                      className="size-4 shrink-0 accent-orange-600 disabled:cursor-not-allowed"
+                    />
+                    <button type="button" disabled={!canPick} onClick={() => toggle(doc.id)} className={cn("min-w-0 flex-1 text-left disabled:cursor-not-allowed", GRID)}>
+                      {nameCell}
+                      {cells}
+                    </button>
+                  </li>
+                );
+              }
+
               return (
-                <li key={doc.id} className={cn("flex items-center gap-3 px-5 py-3", picked && "bg-orange-50/60 dark:bg-orange-500/5", !canPick && "opacity-50")}>
-                  <input
-                    type="checkbox"
-                    checked={picked}
-                    disabled={!canPick}
-                    onChange={() => toggle(doc.id)}
-                    aria-label={`Select ${displayTitle(doc.title, doc.file)}`}
-                    title={canPick ? undefined : "Synced and generated documents can't be deleted here"}
-                    className="size-4 shrink-0 accent-orange-600 disabled:cursor-not-allowed"
-                  />
-                  <button type="button" disabled={!canPick} onClick={() => toggle(doc.id)} className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-not-allowed">
-                    {inner}
-                  </button>
+                <li key={doc.id} className={cn("group relative flex items-center gap-2 px-5 py-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40", GRID)}>
+                  <Link href={detailHref} className="min-w-0 flex-1 md:contents">
+                    <span className="min-w-0 md:block">{nameCell}</span>
+                    {cells}
+                  </Link>
+                  <div className="flex shrink-0 items-center justify-end gap-0.5 text-zinc-400 transition md:opacity-0 md:focus-within:opacity-100 md:group-hover:opacity-100">
+                    <Link href={detailHref} aria-label={`Preview ${title}`} title="Preview" className="rounded-md p-1.5 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                      <Eye size={15} />
+                    </Link>
+                    {doc.file && (
+                      <a
+                        href={`/api/projects/${projectId}/documents/${doc.id}/file`}
+                        aria-label={`Download ${doc.file.name}`}
+                        title="Download"
+                        className="rounded-md p-1.5 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+                      >
+                        <Download size={15} />
+                      </a>
+                    )}
+                    {canEdit && isEditableDocument(doc.source) && (
+                      <Link href={`${detailHref}/edit`} aria-label={`Edit ${title}`} title="Edit" className="rounded-md p-1.5 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100">
+                        <Pencil size={15} />
+                      </Link>
+                    )}
+                    {canDelete && canPick && (
+                      <button
+                        type="button"
+                        aria-label={`Delete ${title}`}
+                        title="Delete"
+                        onClick={() => {
+                          setSelected(new Set([doc.id]));
+                          setConfirmOpen(true);
+                        }}
+                        className="rounded-md p-1.5 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10 dark:hover:text-red-400"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
                 </li>
               );
-            }
-
-            return (
-              <li key={doc.id} className="group flex items-center gap-1 pr-3 hover:bg-zinc-50 dark:hover:bg-zinc-800/40">
-                <Link href={`/projects/${projectId}/documents/${doc.id}`} className="flex min-w-0 flex-1 items-center gap-3 py-3 pl-5 pr-2">
-                  {inner}
-                  {!doc.file && (
-                    <ChevronRight size={16} className="shrink-0 text-zinc-300 transition-transform group-hover:translate-x-0.5 dark:text-zinc-600" />
-                  )}
-                </Link>
-                {doc.file && (
-                  <a
-                    href={`/api/projects/${projectId}/documents/${doc.id}/file`}
-                    aria-label={`Download ${doc.file.name}`}
-                    title="Download"
-                    className="rounded-md p-2 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
-                  >
-                    <Download size={16} />
-                  </a>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+            })}
+          </ul>
+        </div>
       )}
 
       <ConfirmDialog
@@ -360,7 +452,10 @@ export function DocumentationPanel({
         confirmLabel="Delete"
         loading={deleting}
         onConfirm={() => void deleteSelected()}
-        onCancel={() => setConfirmOpen(false)}
+        onCancel={() => {
+          setConfirmOpen(false);
+          if (!selecting) setSelected(new Set());
+        }}
       />
 
       {dragging && (

@@ -1,7 +1,7 @@
 import { requirePagePermission } from "@/lib/auth/dal";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileImage, FileText } from "lucide-react";
+import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileText } from "lucide-react";
 import { getDocumentationById } from "@/lib/documents";
 import {
   documentCategoryLabel,
@@ -14,6 +14,9 @@ import { cn } from "@/lib/cn";
 import { formatDate } from "@/lib/formatDate";
 import { displayTitle, fileExtension, formatFileSize, isInlineSafe } from "@/lib/uploadFile";
 import { MarkdownView } from "@/components/MarkdownView";
+import { FilePreview } from "@/components/FilePreview";
+import { FileTypeTile } from "@/components/FileTypeTile";
+import { previewKindFor } from "@/lib/fileKind";
 import { DocumentActions } from "@/components/DocumentActions";
 
 export default async function DocumentDetailPage({
@@ -33,7 +36,8 @@ export default async function DocumentDetailPage({
   const fileUrl = `/api/projects/${id}/documents/${documentId}/file`;
   const isPdf = file?.contentType === "application/pdf";
   const isImage = Boolean(file?.contentType.startsWith("image/")) && isInlineSafe(file?.contentType ?? "");
-  const HeaderIcon = isImage ? FileImage : file && !isPdf ? FileIcon : FileText;
+  const extension = file ? fileExtension(file.name) : "";
+  const canPreview = Boolean(file) && previewKindFor(extension) !== null;
 
   // One meta line for every kind of document: what it is, where it came from, and when.
   const meta = file
@@ -57,9 +61,13 @@ export default async function DocumentDetailPage({
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="flex min-w-0 items-start gap-3">
-          <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
-            <HeaderIcon size={20} />
-          </span>
+          {file ? (
+            <FileTypeTile extension={extension} contentType={file.contentType} size={44} className="rounded-xl" />
+          ) : (
+            <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+              <FileText size={20} />
+            </span>
+          )}
           <div className="min-w-0">
             <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
               {displayTitle(document.title, file)}
@@ -119,6 +127,8 @@ export default async function DocumentDetailPage({
               className="max-h-[calc(100vh-14rem)] max-w-full rounded-lg object-contain"
             />
           </div>
+        ) : canPreview ? (
+          <FilePreview projectId={id} documentId={documentId} fileName={file.name} />
         ) : (
           <div className="flex flex-col items-center rounded-xl border border-dashed border-zinc-300 px-6 py-20 text-center dark:border-zinc-700">
             <span className="flex size-14 items-center justify-center rounded-2xl bg-zinc-100 text-zinc-400 dark:bg-zinc-800">
