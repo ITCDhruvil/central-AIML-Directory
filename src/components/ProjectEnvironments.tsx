@@ -484,23 +484,26 @@ function CredentialItem({
 
   // The password only exists in this component's state, for a short time after Reveal; it is never put in storage.
   async function fetchPassword(): Promise<string | null> {
-    setBusy(true);
     setError("");
     try {
       return (await call("POST", `${base}/credentials/${cred.id}/reveal`)).password ?? null;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not reveal");
       return null;
-    } finally {
-      setBusy(false);
     }
   }
 
+  // `busy` is only the eye icon's "Decrypting…" state; Login & open has its own (`opening`) and doesn't touch it.
   async function reveal() {
-    const [pw] = await Promise.all([fetchPassword(), new Promise((resolve) => window.setTimeout(resolve, 450))]);
-    if (pw === null) return;
-    setShown(pw);
-    window.setTimeout(() => setShown(null), REVEAL_SECONDS * 1000);
+    setBusy(true);
+    try {
+      const [pw] = await Promise.all([fetchPassword(), new Promise((resolve) => window.setTimeout(resolve, 450))]);
+      if (pw === null) return;
+      setShown(pw);
+      window.setTimeout(() => setShown(null), REVEAL_SECONDS * 1000);
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Copy only works on a password that has been revealed; while it is blurred there is nothing to copy.
@@ -578,7 +581,7 @@ function CredentialItem({
                   <button
                     type="button"
                     onClick={reveal}
-                    disabled={busy}
+                    disabled={busy || opening}
                     title="Click to reveal"
                     aria-label="Reveal password"
                     className="min-w-0 cursor-pointer select-none truncate font-mono text-sm text-zinc-700 blur-[5px] transition hover:blur-[4px] dark:text-zinc-200"
@@ -587,7 +590,7 @@ function CredentialItem({
                     {BLURRED_SAMPLE}
                   </button>
                 )}
-                <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
+                <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy || opening} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
                   {busy && shown === null ? <Loader size={14} /> : shown ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
                 {copied ? (
