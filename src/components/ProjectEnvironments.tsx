@@ -18,7 +18,6 @@ import {
   FlaskConical,
   Globe,
   Info,
-  KeyRound,
   Laptop,
   Link2,
   LogIn,
@@ -37,6 +36,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/Button";
 import { Dropdown, type DropdownOption } from "@/components/ui/Dropdown";
+import { IconPicker, RoleIcon } from "@/components/RoleIcon";
 import { formatRelativeTime } from "@/lib/formatRelativeTime";
 import { useClickOutside } from "@/lib/useClickOutside";
 import { ENVIRONMENT_STATUSES, type EnvironmentStatus } from "@/lib/environments/validate";
@@ -62,6 +62,8 @@ const LINK_GROUPS = ["App", "API", "Health", "Docs", "Azure Portal"];
 const ICON_BUTTON =
   "rounded p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 disabled:opacity-40 dark:hover:bg-zinc-800 dark:hover:text-zinc-200";
 const REVEAL_SECONDS = 30;
+// Shown blurred in place of a hidden password. It is not the password, just text of a similar size to blur.
+const BLURRED_SAMPLE = "p4ssw0rd!x9";
 
 type ApiResult = { environments?: EnvironmentView[]; environment?: EnvironmentView; password?: string; error?: string };
 
@@ -318,32 +320,36 @@ function LinkForm({
 const CUSTOM_ROLE = "__custom__";
 const BASE_ROLES = ["Admin", "Non-admin"];
 
+type KnownRole = { purpose: string; icon: string | null };
+
 function CredentialForm({
   initial,
-  knownPurposes,
+  knownRoles,
   onSave,
   onCancel,
 }: {
   initial?: EnvironmentCredentialView;
-  /** Roles already used by test users elsewhere in this project, offered again so they only have to be typed once. */
-  knownPurposes: string[];
+  /** Roles already used by test users elsewhere in this project (with their icons), offered again so they only have to be set up once. */
+  knownRoles: KnownRole[];
   onSave: (body: Record<string, unknown>) => Promise<void>;
   onCancel: () => void;
 }) {
   const [purpose, setPurpose] = useState(initial?.purpose ?? "");
+  const [icon, setIcon] = useState<string | null>(initial?.icon ?? null);
 
   // Admin and Non-admin first, then any custom roles already in use (case-insensitive, listed once).
   const roles = useMemo(() => {
     const seen = new Set<string>();
-    return [...BASE_ROLES, ...knownPurposes].filter((r) => {
+    return [...BASE_ROLES, ...knownRoles.map((k) => k.purpose)].filter((r) => {
       const key = r.trim().toLowerCase();
       if (!key || seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [knownPurposes]);
+  }, [knownRoles]);
+  const iconOfRole = (role: string) => knownRoles.find((k) => k.icon && k.purpose.toLowerCase() === role.toLowerCase())?.icon ?? null;
   const matchedRole = roles.find((r) => r.toLowerCase() === purpose.trim().toLowerCase());
-  // A role that isn't in the list (or "Custom…" being chosen) shows a text box for typing it.
+  // A role that isn't in the list (or "Custom…" being chosen) swaps the dropdown for a text box with an icon picker.
   const [custom, setCustom] = useState(Boolean(initial?.purpose) && !roles.some((r) => r.toLowerCase() === initial?.purpose.trim().toLowerCase()));
   const roleOptions: DropdownOption[] = [
     ...roles.map((r) => ({ value: r, label: r, icon: r === "Admin" ? ShieldCheck : User })),
@@ -363,7 +369,7 @@ function CredentialForm({
     setError("");
     try {
       // On edit an empty password box means "keep the stored one", so it is left out of the request.
-      await onSave({ purpose, username, notes, ...(password ? { password } : {}) });
+      await onSave({ purpose, icon, username, notes, ...(password ? { password } : {}) });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not save");
       setSaving(false);
@@ -373,34 +379,59 @@ function CredentialForm({
   return (
     <form onSubmit={submit} autoComplete="off" className="space-y-3 rounded-xl bg-zinc-50 p-4 dark:bg-zinc-800/50">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <Label text="Role or purpose">
-          <Dropdown
-            value={custom ? CUSTOM_ROLE : (matchedRole ?? "")}
-            options={roleOptions}
-            placeholder="Select a role"
-            aria-label="Role or purpose"
-            className="w-full"
-            onChange={(value) => {
-              if (value === CUSTOM_ROLE) {
-                setCustom(true);
-                setPurpose("");
-              } else {
-                setCustom(false);
-                setPurpose(value);
-              }
-            }}
-          />
-          {custom && (
-            <input
-              className="field mt-2 w-full"
-              placeholder="Custom role, e.g. tester"
-              value={purpose}
-              onChange={(e) => setPurpose(e.target.value)}
-              maxLength={80}
-              autoFocus
-            />
-          )}
-        </Label>
+        {/* A div, not a label: the icon picker inside has its own inputs and buttons. */}
+        <div className="block text-xs font-medium text-zinc-500 dark:text-zinc-400">
+          Role or purpose
+          <div className="mt-1 font-normal">
+            {custom ? (
+              <div className="relative">
+                <input
+                  className="field w-full pr-[4.25rem]"
+                  placeholder="Custom role, e.g. tester"
+                  aria-label="Custom role"
+                  value={purpose}
+                  onChange={(e) => setPurpose(e.target.value)}
+                  maxLength={80}
+                  autoFocus
+                />
+                <div className="absolute inset-y-0 right-1.5 flex items-center gap-0.5">
+                  <IconPicker value={icon} roleText={purpose} onChange={setIcon} />
+                  <button
+                    type="button"
+                    aria-label="Choose from the list instead"
+                    title="Choose from the list"
+                    onClick={() => {
+                      setCustom(false);
+                      setPurpose("");
+                      setIcon(null);
+                    }}
+                    className="flex h-7 w-7 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <Dropdown
+                value={matchedRole ?? ""}
+                options={roleOptions}
+                placeholder="Select a role"
+                aria-label="Role or purpose"
+                className="w-full"
+                onChange={(value) => {
+                  if (value === CUSTOM_ROLE) {
+                    setCustom(true);
+                    setPurpose("");
+                    setIcon(null);
+                  } else {
+                    setPurpose(value);
+                    setIcon(iconOfRole(value));
+                  }
+                }}
+              />
+            )}
+          </div>
+        </div>
         <Label text="Username">
           <input className="field w-full" value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="off" />
         </Label>
@@ -508,9 +539,7 @@ function CredentialItem({
     <li className="group rounded-xl bg-zinc-50 px-4 py-3 dark:bg-zinc-800/50">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex min-w-0 flex-1 basis-52 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
-            <KeyRound size={16} />
-          </div>
+          <RoleIcon icon={cred.icon} purpose={cred.purpose} size={20} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{cred.purpose}</p>
             {cred.notes && <p className="truncate text-xs text-zinc-400" title={cred.notes}>{cred.notes}</p>}
@@ -531,12 +560,26 @@ function CredentialItem({
             {!cred.hasPassword ? (
               <span className="text-sm text-zinc-400">Not set</span>
             ) : !canEdit ? (
-              <span className="font-mono text-sm text-zinc-400" title="Only people who can edit this project can see passwords">
-                ••••••••
+              <span className="select-none font-mono text-sm text-zinc-500 blur-[5px]" title="Only people who can edit this project can see passwords" aria-label="Hidden password">
+                {BLURRED_SAMPLE}
               </span>
             ) : (
               <>
-                <span className="min-w-0 truncate font-mono text-sm text-zinc-800 dark:text-zinc-100">{shown ?? "••••••••"}</span>
+                {shown !== null ? (
+                  <span className="min-w-0 truncate font-mono text-sm text-zinc-800 dark:text-zinc-100">{shown}</span>
+                ) : (
+                  // Stand-in text, blurred. The real password is never in the page until Reveal fetches it.
+                  <button
+                    type="button"
+                    onClick={reveal}
+                    disabled={busy}
+                    title="Click to reveal"
+                    aria-label="Reveal password"
+                    className="min-w-0 cursor-pointer select-none truncate font-mono text-sm text-zinc-700 blur-[5px] transition hover:blur-[4px] dark:text-zinc-200"
+                  >
+                    {BLURRED_SAMPLE}
+                  </button>
+                )}
                 <button type="button" className={ICON_BUTTON} onClick={shown ? () => setShown(null) : reveal} disabled={busy} aria-label={shown ? "Hide password" : "Reveal password"} title={shown ? "Hide" : "Reveal"}>
                   {shown ? <EyeOff size={14} /> : <Eye size={14} />}
                 </button>
@@ -716,7 +759,7 @@ function EnvironmentCard({
   isFirst,
   isLast,
   takenNames,
-  knownPurposes,
+  knownRoles,
   defaultOpen,
   run,
   onMove,
@@ -727,7 +770,7 @@ function EnvironmentCard({
   isFirst: boolean;
   isLast: boolean;
   takenNames: string[];
-  knownPurposes: string[];
+  knownRoles: KnownRole[];
   defaultOpen: boolean;
   run: (fn: () => Promise<ApiResult>) => Promise<void>;
   onMove: (direction: -1 | 1) => void;
@@ -1012,7 +1055,7 @@ function EnvironmentCard({
                     <li key={c.id}>
                       <CredentialForm
                         initial={c}
-                        knownPurposes={knownPurposes}
+                        knownRoles={knownRoles}
                         onCancel={() => setEditing(null)}
                         onSave={async (body) => {
                           await run(() => call("PUT", `${base}/credentials/${c.id}`, body));
@@ -1029,7 +1072,7 @@ function EnvironmentCard({
             {editing === "newCred" && (
               <div className="mt-3">
                 <CredentialForm
-                  knownPurposes={knownPurposes}
+                  knownRoles={knownRoles}
                   onCancel={() => setEditing(null)}
                   onSave={async (body) => {
                     await run(() => call("POST", `${base}/credentials`, body));
@@ -1124,7 +1167,7 @@ export function ProjectEnvironments({
   }
 
   const takenNames = envs.map((e) => e.name);
-  const knownPurposes = envs.flatMap((e) => e.credentials.map((c) => c.purpose));
+  const knownRoles = envs.flatMap((e) => e.credentials.map((c) => ({ purpose: c.purpose, icon: c.icon })));
 
   return (
     <div className="space-y-4">
@@ -1196,7 +1239,7 @@ export function ProjectEnvironments({
             isFirst={i === 0}
             isLast={i === envs.length - 1}
             takenNames={takenNames}
-            knownPurposes={knownPurposes}
+            knownRoles={knownRoles}
             defaultOpen={false}
             run={run}
             onMove={(d) => move(i, d)}

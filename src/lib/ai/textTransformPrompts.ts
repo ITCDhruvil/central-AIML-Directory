@@ -1,4 +1,4 @@
-export const TEXT_TRANSFORM_ACTIONS = ["improve", "fix-grammar", "shorten", "lengthen", "tone", "translate", "title"] as const;
+export const TEXT_TRANSFORM_ACTIONS = ["improve", "fix-grammar", "shorten", "lengthen", "tone", "translate", "title", "icons"] as const;
 export type TextTransformAction = (typeof TEXT_TRANSFORM_ACTIONS)[number];
 
 export const TEXT_TRANSFORM_TONES = ["professional", "casual", "confident", "friendly"] as const;
@@ -43,6 +43,8 @@ const ACTION_INSTRUCTIONS: Record<TextTransformAction, string> = {
   tone: "Rewrite in the requested tone (given below) without changing the underlying facts or structure.",
   title:
     "Do NOT rewrite the text. Instead write ONE short, specific title for it: 2 to 6 words, plain text only (no Markdown, no quotes, no trailing punctuation), naming what the text is about. Put the title in the \"text\" field.",
+  icons:
+    "Do NOT rewrite the text. The text is the name of a role for a test account (for example Admin, Tester, Finance approver). Suggest 8 icons from the Lucide icon set that suit it. Put them in the \"text\" field as comma-separated PascalCase Lucide icon names, for example: ShieldCheck, UserCog, Crown.",
   translate:
     "Translate the text into the requested language (given below). Keep the Markdown structure (headings, bold, bullet lists, code spans) intact — translate the prose, not code identifiers, URLs, or inline code content.",
 };

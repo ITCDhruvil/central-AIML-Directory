@@ -430,6 +430,8 @@ model EnvironmentCredential {
   environment   ProjectEnvironment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
 
   purpose     String
+  // A Lucide icon name (PascalCase, e.g. "ShieldCheck") shown with the role; null falls back to a default for the role.
+  icon        String?
   username    String
   passwordEnc String?
   notes       String?

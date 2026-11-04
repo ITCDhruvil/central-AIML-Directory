@@ -13,6 +13,8 @@ export type EnvironmentLinkView = {
 export type EnvironmentCredentialView = {
   id: string;
   purpose: string;
+  /** Lucide icon name chosen for the role, or null for the default. */
+  icon: string | null;
   username: string;
   notes: string | null;
   hasPassword: boolean;

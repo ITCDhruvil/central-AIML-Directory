@@ -629,6 +629,7 @@ const BUSY_LABEL: Record<TextTransformAction, string> = {
   tone: "Changing the tone…",
   translate: "Translating…",
   title: "Writing a title…",
+  icons: "Finding icons…",
 };
 
 function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null) => void }) {

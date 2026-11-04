@@ -36,6 +36,7 @@ function toCredential(c: EnvRow["credentials"][number]): EnvironmentCredentialVi
   return {
     id: c.id,
     purpose: c.purpose,
+    icon: c.icon,
     username: c.username,
     notes: c.notes,
     hasPassword: Boolean(c.passwordEnc),
@@ -254,6 +255,7 @@ export async function createCredential(projectId: string, envId: string, input: 
     data: {
       environmentId: envId,
       purpose: input.purpose as string,
+      icon: input.icon ?? null,
       username: input.username as string,
       notes: input.notes ?? null,
       passwordEnc: hasPassword ? encryptPassword(input.password as string) : null,
@@ -308,7 +310,7 @@ export async function revealPassword(
   if (!cred.passwordEnc) throw new EnvironmentError("No password is stored for this account", 404);
   const password = decryptPassword(cred.passwordEnc);
   if (password === null) {
-    throw new EnvironmentError("This password can no longer be read. Please enter it again.", 409);
+    throw new EnvironmentError("This password can't be read here: it was saved with a different server key (AUTH_SECRET), for example from another deployment. Please enter it again.", 409);
   }
   return { password, username: cred.username, environmentName: cred.environment.name };
 }

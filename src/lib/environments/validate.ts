@@ -138,7 +138,13 @@ export function validateLink(raw: unknown, onCreate: boolean): LinkInput {
   return out;
 }
 
-export type CredentialInput = { purpose?: string; username?: string; password?: string | null; notes?: string | null };
+export type CredentialInput = {
+  purpose?: string;
+  icon?: string | null;
+  username?: string;
+  password?: string | null;
+  notes?: string | null;
+};
 
 /** `password`: a string sets it, null or empty clears it, absent leaves it. Passwords are not trimmed. */
 export function validateCredential(raw: unknown, onCreate: boolean): CredentialInput {
@@ -150,6 +156,12 @@ export function validateCredential(raw: unknown, onCreate: boolean): CredentialI
   if (username !== undefined) out.username = username;
   const notes = text(o, "notes", MAX.notes, "Notes");
   if (notes !== undefined) out.notes = notes;
+  if ("icon" in o) {
+    const icon = o.icon;
+    if (icon === null || icon === "") out.icon = null;
+    else if (typeof icon !== "string" || !/^[A-Z][A-Za-z0-9]{0,59}$/.test(icon)) throw new EnvironmentError("Icon must be an icon name");
+    else out.icon = icon;
+  }
   if ("password" in o) {
     const p = o.password;
     if (p === null || p === "") out.password = null;
