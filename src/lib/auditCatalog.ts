@@ -1,6 +1,6 @@
 // Browser-safe: the list of recorded events, their labels and grouping, shared by the writer and the admin page.
 
-export type AuditCategory = "Sign-in" | "Users & access" | "Settings" | "Projects" | "Ideas" | "Documents";
+export type AuditCategory = "Sign-in" | "Users & access" | "Settings" | "Projects" | "Environments" | "Ideas" | "Documents";
 
 export const AUDIT_ACTIONS = {
   "auth.login": { label: "Signed in", category: "Sign-in" },
@@ -38,6 +38,13 @@ export const AUDIT_ACTIONS = {
   "idea.deleted": { label: "Deleted an idea", category: "Ideas" },
   "idea.promoted": { label: "Promoted an idea to a project", category: "Ideas" },
 
+  "environment.created": { label: "Added an environment", category: "Environments" },
+  "environment.updated": { label: "Edited an environment", category: "Environments" },
+  "environment.deleted": { label: "Deleted an environment", category: "Environments" },
+  "environment.credential_saved": { label: "Saved an environment test account", category: "Environments" },
+  "environment.credential_revealed": { label: "Revealed an environment test password", category: "Environments" },
+  "environment.credential_deleted": { label: "Deleted an environment test account", category: "Environments" },
+
   "document.created": { label: "Created a document", category: "Documents" },
   "document.updated": { label: "Edited a document", category: "Documents" },
   "document.uploaded": { label: "Uploaded a document file", category: "Documents" },
@@ -46,7 +53,7 @@ export const AUDIT_ACTIONS = {
 
 export type AuditAction = keyof typeof AUDIT_ACTIONS;
 
-export const AUDIT_CATEGORIES: AuditCategory[] = ["Sign-in", "Users & access", "Settings", "Projects", "Ideas", "Documents"];
+export const AUDIT_CATEGORIES: AuditCategory[] = ["Sign-in", "Users & access", "Settings", "Projects", "Environments", "Ideas", "Documents"];
 
 export function actionLabel(action: string): string {
   return (AUDIT_ACTIONS as Record<string, { label: string }>)[action]?.label ?? action;

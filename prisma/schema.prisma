@@ -42,6 +42,7 @@ model Project {
 
   documentation Documentation[]
   activities    ProjectActivity[]
+  environments  ProjectEnvironment[]
 
   @@index([status])
   @@index([type])
@@ -368,4 +369,76 @@ model InsightGeneration {
   updatedTitles  String   @default("[]")
 
   @@index([scope, generatedAt])
+}
+
+// One deployment environment of a project (DEV, QA, UAT, PROD or a custom one). Generic per project; managed from the UI.
+model ProjectEnvironment {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name         String
+  // Marks a production-like environment. The server refuses to store test credentials for these.
+  isProduction Boolean @default(false)
+  // EnvironmentStatus: LIVE | DOWN | NOT_DEPLOYED | PLANNED | UNKNOWN
+  status       String  @default("UNKNOWN")
+  appUrl       String?
+  apiUrl       String?
+  healthUrl    String?
+  hosting      String?
+  databaseSet  String?
+  version      String?
+  lastDeployedAt DateTime?
+  notes        String?
+  position     Int     @default(0)
+  // Set by the optional health-check ping.
+  lastCheckedAt DateTime?
+
+  updatedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  links       EnvironmentLink[]
+  credentials EnvironmentCredential[]
+
+  @@unique([projectId, name])
+  @@index([projectId, position])
+}
+
+model EnvironmentLink {
+  id            String             @id @default(cuid())
+  environmentId String
+  environment   ProjectEnvironment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  label String
+  url   String
+  // App | API | Health | Docs | Azure Portal | ... (free text)
+  group String?
+  position Int @default(0)
+
+  updatedByName String?
+  updatedAt     DateTime @updatedAt
+
+  @@index([environmentId, position])
+}
+
+// A test account for one environment. passwordEnc is AES-256-GCM encrypted (see lib/environments/credentialCrypto.ts);
+// it is never returned by list endpoints, only by the audited reveal endpoint.
+model EnvironmentCredential {
+  id            String             @id @default(cuid())
+  environmentId String
+  environment   ProjectEnvironment @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+
+  purpose     String
+  username    String
+  passwordEnc String?
+  notes       String?
+
+  passwordUpdatedByName String?
+  passwordUpdatedAt     DateTime?
+  updatedByName         String?
+  updatedAt             DateTime  @updatedAt
+  createdAt             DateTime  @default(now())
+
+  @@index([environmentId])
 }

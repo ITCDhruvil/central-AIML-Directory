@@ -45,6 +45,9 @@ import { DocumentationPanel } from "@/components/DocumentationPanel";
 import { ProjectAssistant } from "@/components/ProjectAssistant";
 import { ProjectDetailsEditor } from "@/components/ProjectDetailsEditor";
 import { ProjectTeam } from "@/components/ProjectTeam";
+import { ProjectEnvironments } from "@/components/ProjectEnvironments";
+import { canEditEnvironments } from "@/lib/environments/access";
+import { listEnvironments } from "@/lib/environments/service";
 import { canManageProjectTeam } from "@/lib/projectTeamAccess";
 import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
@@ -158,9 +161,11 @@ export default async function ProjectDetailPage({
   const canUseAssistant = can(user.permissions, "ai_project_assistant", "use");
   const canViewDocuments = can(user.permissions, "documents", "view");
   const documentAccess = canViewDocuments ? (await loadViewAccess(user)).documents : NO_ACCESS;
-  const [documents, activities] = await Promise.all([
+  const [documents, activities, environments, canEditEnvs] = await Promise.all([
     canViewDocuments ? listDocumentation(project.id, documentAccess) : Promise.resolve([]),
     listRecentProjectActivities(project.id, 200),
+    listEnvironments(project.id),
+    canEditEnvironments(user, project.id),
   ]);
   const attentionIssues = getNeedsAttentionIssues(project);
   const isGithubConnected = Boolean(project.githubUrl && project.githubOwner && project.githubRepo);
@@ -287,6 +292,8 @@ export default async function ProjectDetailPage({
     />
   );
 
+  const environmentsPanel = <ProjectEnvironments projectId={project.id} initial={environments} canEdit={canEditEnvs} />;
+
   const linksPanel =
     project.githubUrl || project.deploymentUrls.length > 0 || readmeDoc || setupGuideDoc || architectureDoc ? (
       <SectionCard icon={Link2} title="Quick Links">
@@ -394,6 +401,7 @@ export default async function ProjectDetailPage({
         overview={overviewPanel}
         documentation={documentationPanel}
         askAi={askAiPanel}
+        environments={environmentsPanel}
         links={linksPanel}
         sidebar={detailsColumn}
         actions={
