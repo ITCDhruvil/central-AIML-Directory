@@ -446,6 +446,8 @@ function CredentialItem({
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  // Only "Login & open" shows its own spinner; Reveal and Copy use `busy`, which just disables their icons.
+  const [opening, setOpening] = useState(false);
 
   // The password only exists in this component's state, for a short time after Reveal; it is never put in storage.
   async function fetchPassword(): Promise<string | null> {
@@ -484,17 +486,22 @@ function CredentialItem({
   // opens the app, and the person pastes it. The tab is opened after the copy because a new tab takes the focus the
   // clipboard needs.
   async function loginAndOpen() {
-    const pw = shown ?? (await fetchPassword());
-    if (pw === null || !openUrl) return;
+    setOpening(true);
     try {
-      await navigator.clipboard.writeText(pw);
-    } catch {
-      setError("Could not copy to the clipboard");
-      return;
+      const pw = shown ?? (await fetchPassword());
+      if (pw === null || !openUrl) return;
+      try {
+        await navigator.clipboard.writeText(pw);
+      } catch {
+        setError("Could not copy to the clipboard");
+        return;
+      }
+      window.open(openUrl, "_blank", "noopener,noreferrer");
+      setNote(`Password copied. Sign in as ${cred.username} and paste it.`);
+      window.setTimeout(() => setNote(""), 10000);
+    } finally {
+      setOpening(false);
     }
-    window.open(openUrl, "_blank", "noopener,noreferrer");
-    setNote(`Password copied. Sign in as ${cred.username} and paste it.`);
-    window.setTimeout(() => setNote(""), 10000);
   }
 
   return (
@@ -548,7 +555,7 @@ function CredentialItem({
         </div>
 
         {canEdit && openUrl && cred.hasPassword && (
-          <Button variant="secondary" size="sm" icon={LogIn} onClick={loginAndOpen} loading={busy} className="rounded-lg" title="Copy the password and open the app">
+          <Button variant="secondary" size="sm" icon={LogIn} onClick={loginAndOpen} loading={opening} className="rounded-lg" title="Copy the password and open the app">
             Login &amp; open
           </Button>
         )}
