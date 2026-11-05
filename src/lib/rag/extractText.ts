@@ -3,22 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { buildPreview } from "@/lib/filePreview";
 import { fileExtension } from "@/lib/uploadFile";
 
-/** Plain text of a PDF (every page's text, in order). Uses pdfjs' Node-safe legacy build. */
+/** Plain text of a PDF (all pages). Uses unpdf, which bundles a serverless-safe pdfjs (no external worker file). */
 async function extractPdfText(bytes: Buffer): Promise<string> {
-  // Dynamic import so pdfjs (a large dependency) only loads when a PDF is actually indexed.
-  const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
-  const doc = await pdfjs.getDocument({ data: new Uint8Array(bytes), isEvalSupported: false, useSystemFonts: true }).promise;
-  try {
-    let text = "";
-    for (let p = 1; p <= doc.numPages; p += 1) {
-      const page = await doc.getPage(p);
-      const content = await page.getTextContent();
-      text += content.items.map((item) => ("str" in item ? item.str : "")).join(" ") + "\n";
-    }
-    return text;
-  } finally {
-    await doc.destroy();
-  }
+  // Dynamic import so the PDF engine only loads when a PDF is actually indexed.
+  const { extractText, getDocumentProxy } = await import("unpdf");
+  const pdf = await getDocumentProxy(new Uint8Array(bytes));
+  const { text } = await extractText(pdf, { mergePages: true });
+  return Array.isArray(text) ? text.join("\n") : text;
 }
 
 function stripHtml(html: string): string {
