@@ -81,3 +81,18 @@ export function deploymentUrlsChanged(before: string[], after: string[]): boolea
   const b = [...after].map((u) => u.trim()).sort();
   return a.some((url, i) => url !== b[i]);
 }
+
+/** Activity across the directory since a date, newest first, with each project's name — for the weekly digest. */
+export async function listActivitiesSince(
+  since: Date,
+  access: AccessScope = ALL_ACCESS,
+  limit = 200,
+): Promise<ProjectActivityWithProject[]> {
+  const rows = await prisma.projectActivity.findMany({
+    where: andWhere({ createdAt: { gte: since } }, access.all ? {} : { project: projectScopeWhere(access) }),
+    include: { project: { select: { id: true, name: true } } },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+  return rows.map((row) => ({ ...toProjectActivity(row), projectName: row.project.name }));
+}

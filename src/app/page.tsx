@@ -5,6 +5,7 @@ import { Lightbulb, Plus } from "lucide-react";
 import { ProjectExplorer } from "@/components/ProjectExplorer";
 import { WorkspacePulse } from "@/components/WorkspacePulse";
 import { DashboardFeed } from "@/components/DashboardFeed";
+import { WeeklyDigest } from "@/components/WeeklyDigest";
 import { SkeletonCardGrid } from "@/components/ui/Skeleton";
 import { Button } from "@/components/ui/Button";
 import { loadAccessScope } from "@/lib/auth/scopeLoader";
@@ -79,6 +80,8 @@ export default async function DashboardPage() {
         ideas={showIdeas ? takeRecent(ideas, (idea) => idea.updatedAt) : null}
         insights={insightSnap ? takeRecent(insightSnap.insights, (insight) => insight.lastGeneratedAt) : null}
       />
+
+      {showInsights && <WeeklyDigest />}
 
       {showProjects && (
         <div className="space-y-3">
