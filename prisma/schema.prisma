@@ -43,6 +43,7 @@ model Project {
   documentation Documentation[]
   activities    ProjectActivity[]
   environments  ProjectEnvironment[]
+  note          ProjectNote?
 
   @@index([status])
   @@index([type])
@@ -443,4 +444,14 @@ model EnvironmentCredential {
   createdAt             DateTime  @default(now())
 
   @@index([environmentId])
+}
+
+// A single free-text notepad per project (meeting notes, decisions, to-dos). Rich text stored as Markdown.
+model ProjectNote {
+  projectId     String   @id
+  project       Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  content       String   @default("")
+  updatedByName String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

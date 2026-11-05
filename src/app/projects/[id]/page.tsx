@@ -47,6 +47,8 @@ import { ProjectTeam } from "@/components/ProjectTeam";
 import { ProjectEnvironments } from "@/components/ProjectEnvironments";
 import { canEditEnvironments } from "@/lib/environments/access";
 import { listEnvironments } from "@/lib/environments/service";
+import { getProjectNote } from "@/lib/projectNote";
+import { ProjectNotes } from "@/components/ProjectNotes";
 import { canManageProjectTeam } from "@/lib/projectTeamAccess";
 import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
@@ -160,11 +162,12 @@ export default async function ProjectDetailPage({
   const canUseAssistant = can(user.permissions, "ai_project_assistant", "use");
   const canViewDocuments = can(user.permissions, "documents", "view");
   const documentAccess = canViewDocuments ? (await loadViewAccess(user)).documents : NO_ACCESS;
-  const [documents, activities, environments, canEditEnvs] = await Promise.all([
+  const [documents, activities, environments, canEditEnvs, note] = await Promise.all([
     canViewDocuments ? listDocumentation(project.id, documentAccess) : Promise.resolve([]),
     listRecentProjectActivities(project.id, 200),
     listEnvironments(project.id),
     canEditEnvironments(user, project.id),
+    getProjectNote(project.id),
   ]);
   const attentionIssues = getNeedsAttentionIssues(project);
   const isGithubConnected = Boolean(project.githubUrl && project.githubOwner && project.githubRepo);
@@ -292,6 +295,10 @@ export default async function ProjectDetailPage({
 
   const environmentsPanel = <ProjectEnvironments projectId={project.id} initial={environments} canEdit={canEditEnvs} />;
 
+  const notesPanel = (
+    <ProjectNotes projectId={project.id} initial={note} canEdit={canEditProject} canUseAi={can(user.permissions, "ai_text_transform", "use")} />
+  );
+
   const detailsColumn = (
     <>
       <SectionCard icon={Users} title="Team">
@@ -357,6 +364,7 @@ export default async function ProjectDetailPage({
       <ProjectDetailTabs
         overview={overviewPanel}
         documentation={documentationPanel}
+        notes={notesPanel}
         askAi={askAiPanel}
         environments={environmentsPanel}
         sidebar={detailsColumn}
