@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { guardedAi } from "@/lib/ai/guard";
 import { apiAuthorize } from "@/lib/auth/dal";
 import { getProjectById } from "@/lib/projects";
-import { getProjectIndexStatus, indexProject } from "@/lib/rag/indexer";
+import { getDocumentIndexMap, getProjectIndexStatus, indexProject } from "@/lib/rag/indexer";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -13,7 +13,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
   const { id } = await params;
   const project = await getProjectById(id, auth.access);
   if (!project) return NextResponse.json({ error: "Project not found" }, { status: 404 });
-  return NextResponse.json({ status: await getProjectIndexStatus(id) });
+  const [status, perDoc] = await Promise.all([getProjectIndexStatus(id), getDocumentIndexMap(id)]);
+  return NextResponse.json({ status, perDoc });
 }
 
 /** Indexes every document in the project (skipping unchanged ones). Needs project edit rights. */

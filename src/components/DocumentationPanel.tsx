@@ -34,6 +34,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FileTypeTile, KIND_ICON } from "@/components/FileTypeTile";
 import { SearchInput } from "@/components/SearchInput";
 import { Button } from "@/components/ui/Button";
+import { Loader } from "@/components/prompt-kit/loader";
 import { FilterMenu, type FilterOption, type FilterSection } from "@/components/ui/FilterMenu";
 import { Pagination } from "@/components/ui/Pagination";
 import { cn } from "@/lib/cn";
@@ -133,6 +134,37 @@ function sizeOf(doc: DocumentRow): number {
   return doc.file?.size ?? -1;
 }
 
+type RowStatus = "INDEXED" | "EMPTY" | "FAILED" | "INDEXING";
+type RowIndex = { status: RowStatus; chunkCount?: number };
+
+const INDEX_CHIP: Record<RowStatus, string> = {
+  INDEXED: "bg-green-50 text-green-700 dark:bg-green-500/10 dark:text-green-400",
+  INDEXING: "bg-amber-50 text-amber-700 dark:bg-amber-500/10 dark:text-amber-400",
+  EMPTY: "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
+  FAILED: "bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400",
+};
+
+/** A small chip showing whether a document is in the Ask AI index. */
+function IndexChip({ info }: { info?: RowIndex }) {
+  if (!info) {
+    return <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500">Not indexed</span>;
+  }
+  const label =
+    info.status === "INDEXING"
+      ? "Indexing\u2026"
+      : info.status === "INDEXED"
+        ? `Indexed${info.chunkCount ? ` \u00b7 ${info.chunkCount}` : ""}`
+        : info.status === "EMPTY"
+          ? "No text"
+          : "Index failed";
+  return (
+    <span className={cn("inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium", INDEX_CHIP[info.status])}>
+      {info.status === "INDEXING" && <Loader size={9} />}
+      {label}
+    </span>
+  );
+}
+
 type IndexStatus = { total: number; indexed: number; failed: number; empty: number; pending: number; chunks: number; configured: boolean };
 
 export function DocumentationPanel({
@@ -159,6 +191,8 @@ export function DocumentationPanel({
   const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
   const [indexing, setIndexing] = useState(false);
   const [indexMsg, setIndexMsg] = useState<string | null>(null);
+  const [perDoc, setPerDoc] = useState<Record<string, RowIndex>>({});
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [removed, setRemoved] = useState(0);
   const canDelete = useCan("documents", "delete");
   const canEdit = useCan("documents", "edit");
@@ -323,7 +357,15 @@ export function DocumentationPanel({
     fetch(`/api/projects/${projectId}/index`)
       .then((r) => (r.ok ? r.json() : null))
       .then((body) => {
-        if (!cancelled && body?.status) setIndexStatus(body.status);
+        if (cancelled || !body) return;
+        if (body.status) setIndexStatus(body.status);
+        if (body.perDoc) {
+          const map: Record<string, RowIndex> = {};
+          for (const [docId, info] of Object.entries(body.perDoc as Record<string, { status: RowStatus; chunkCount: number }>)) {
+            map[docId] = { status: info.status, chunkCount: info.chunkCount };
+          }
+          setPerDoc(map);
+        }
       })
       .catch(() => {});
     return () => {
@@ -331,25 +373,52 @@ export function DocumentationPanel({
     };
   }, [canIndex, projectId]);
 
+  const setRow = (docId: string, info: RowIndex) => setPerDoc((prev) => ({ ...prev, [docId]: info }));
+
+  // Indexes documents one at a time so each row updates live and a progress counter shows real-time status.
   async function indexAll() {
     if (indexing) return;
     setIndexing(true);
     setIndexMsg(null);
-    try {
-      const res = await fetch(`/api/projects/${projectId}/index`, { method: "POST" });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) {
-        setIndexMsg(body.error ?? "Could not index the documents.");
-        return;
+    const targets = [...documents];
+    setProgress({ done: 0, total: targets.length });
+    let indexed = 0;
+    let skipped = 0;
+    let failed = 0;
+    let stopped = "";
+    for (let i = 0; i < targets.length; i += 1) {
+      const doc = targets[i];
+      setRow(doc.id, { ...perDoc[doc.id], status: "INDEXING" });
+      try {
+        const res = await fetch(`/api/projects/${projectId}/documents/${doc.id}/index`, { method: "POST" });
+        const body = await res.json().catch(() => ({}));
+        if (res.ok && body.result) {
+          const r = body.result as { status: RowStatus; chunkCount: number; skipped: boolean };
+          setRow(doc.id, { status: r.status, chunkCount: r.chunkCount });
+          if (r.skipped) skipped += 1;
+          else if (r.status === "FAILED") failed += 1;
+          else indexed += 1;
+        } else {
+          setRow(doc.id, { status: "FAILED" });
+          failed += 1;
+          if (res.status === 503) {
+            stopped = body.error ?? "AI embeddings are not configured.";
+            break;
+          }
+        }
+      } catch {
+        setRow(doc.id, { status: "FAILED" });
+        failed += 1;
       }
-      if (body.status) setIndexStatus(body.status);
-      const sm = body.summary;
-      if (sm) setIndexMsg(`Indexed ${sm.indexed}, skipped ${sm.skipped} unchanged${sm.failed ? `, ${sm.failed} failed` : ""}.`);
-    } catch {
-      setIndexMsg("Network error — please try again.");
-    } finally {
-      setIndexing(false);
+      setProgress({ done: i + 1, total: targets.length });
     }
+    setProgress(null);
+    setIndexing(false);
+    setIndexMsg(stopped || `Indexed ${indexed}, ${skipped} already up to date${failed ? `, ${failed} failed` : ""}.`);
+    fetch(`/api/projects/${projectId}/index`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b) => b?.status && setIndexStatus(b.status))
+      .catch(() => {});
   }
 
   return (
@@ -404,7 +473,9 @@ export function DocumentationPanel({
         <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-800/40">
           <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
             <Sparkles size={13} className="text-orange-500" />
-            {!indexStatus
+            {indexing && progress
+              ? `Indexing ${progress.done} of ${progress.total}\u2026`
+              : !indexStatus
               ? "Ask AI index"
               : !indexStatus.configured
                 ? "AI embeddings aren't configured, so Ask AI can't search documents."
@@ -513,9 +584,12 @@ export function DocumentationPanel({
                   <FileTypeTile extension={ext} contentType={doc.file?.contentType} size={36} />
                   <span className="min-w-0">
                     <span className="block truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{title}</span>
-                    <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                      <span className="md:hidden">{compact}</span>
-                      <span className="hidden md:inline">{sub}</span>
+                    <span className="mt-0.5 flex items-center gap-1.5 text-xs text-zinc-500 dark:text-zinc-400">
+                      <span className="truncate">
+                        <span className="md:hidden">{compact}</span>
+                        <span className="hidden md:inline">{sub}</span>
+                      </span>
+                      {canIndex && <IndexChip info={perDoc[doc.id]} />}
                     </span>
                   </span>
                 </span>

@@ -136,3 +136,13 @@ export async function getProjectIndexStatus(projectId: string): Promise<ProjectI
     configured: getAIConfig() !== null,
   };
 }
+
+export type DocIndexInfo = { status: IndexStatus; chunkCount: number; indexedAt: string };
+
+/** Per-document index state, keyed by documentId, for the Documentation list chips. */
+export async function getDocumentIndexMap(projectId: string): Promise<Record<string, DocIndexInfo>> {
+  const rows = await prisma.documentIndex.findMany({ where: { projectId }, select: { documentId: true, status: true, chunkCount: true, indexedAt: true } });
+  const map: Record<string, DocIndexInfo> = {};
+  for (const r of rows) map[r.documentId] = { status: r.status as IndexStatus, chunkCount: r.chunkCount, indexedAt: r.indexedAt.toISOString() };
+  return map;
+}
