@@ -49,6 +49,7 @@ import { canEditEnvironments } from "@/lib/environments/access";
 import { listEnvironments } from "@/lib/environments/service";
 import { getProjectNote } from "@/lib/projectNote";
 import { ProjectNotes } from "@/components/ProjectNotes";
+import { DayNoteCalendar } from "@/components/DayNoteCalendar";
 import { canManageProjectTeam } from "@/lib/projectTeamAccess";
 import { TechStackSummaryEditor } from "@/components/TechStackSummaryEditor";
 import { Button, type IconType } from "@/components/ui/Button";
@@ -296,7 +297,19 @@ export default async function ProjectDetailPage({
   const environmentsPanel = <ProjectEnvironments projectId={project.id} initial={environments} canEdit={canEditEnvs} />;
 
   const notesPanel = (
-    <ProjectNotes projectId={project.id} initial={note} canEdit={canEditProject} canUseAi={can(user.permissions, "ai_text_transform", "use")} />
+    <div className="space-y-6">
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">General notes</h2>
+        <ProjectNotes projectId={project.id} initial={note} canEdit={canEditProject} canUseAi={can(user.permissions, "ai_text_transform", "use")} />
+      </section>
+      <section className="space-y-2 border-t border-zinc-100 pt-6 dark:border-zinc-800">
+        <div>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Daily log</h2>
+          <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">A shared day-by-day log for this project. Everyone who can edit it writes here.</p>
+        </div>
+        <DayNoteCalendar apiBase={`/api/projects/${project.id}/day-notes`} canEdit={canEditProject} />
+      </section>
+    </div>
   );
 
   const detailsColumn = (
