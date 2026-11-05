@@ -436,3 +436,13 @@ input.autofill-clean:-webkit-autofill:focus {
     opacity: 0.6;
   }
 }
+
+/* Inline AI autocomplete (components/ui/GhostText.ts): the grey suggestion shown after the cursor; Tab accepts it. */
+.ghost-text {
+  color: #a1a1aa;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+.dark .ghost-text {
+  color: #71717a;
+}

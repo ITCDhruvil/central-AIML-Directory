@@ -61,6 +61,7 @@ import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { cn } from "@/lib/cn";
 import { cleanPastedHtml } from "@/lib/cleanPastedHtml";
 import { EditorAiCommands } from "@/components/ui/EditorAiCommands";
+import { GhostText } from "@/components/ui/GhostText";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   TEXT_TRANSFORM_LANGUAGES,
@@ -728,10 +729,36 @@ function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | n
   );
 }
 
-function Toolbar({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null) => void }) {
+function Toolbar({
+  editor,
+  onBusy,
+  autocomplete,
+  onToggleAutocomplete,
+}: {
+  editor: Editor;
+  onBusy: (label: string | null) => void;
+  autocomplete: boolean;
+  onToggleAutocomplete: () => void;
+}) {
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-zinc-50 px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-950">
       <AiMenu editor={editor} onBusy={onBusy} />
+      <button
+        type="button"
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={onToggleAutocomplete}
+        title="AI autocomplete: suggests the rest as grey text; press Tab to accept"
+        aria-pressed={autocomplete}
+        className={cn(
+          "ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+          autocomplete
+            ? "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
+            : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
+        )}
+      >
+        <Zap size={14} />
+        Autocomplete
+      </button>
 
       <ToolbarDivider />
 
@@ -807,6 +834,8 @@ export function RichTextEditor({
 }) {
   // Set while an AI action is rewriting the text: shows the status over the text area and blocks typing meanwhile.
   const [busy, setBusy] = useState<string | null>(null);
+  // Opt-in inline AI autocomplete (grey suggestions; Tab to accept).
+  const [autocomplete, setAutocomplete] = useState(false);
 
   const editor = useEditor({
     extensions: [
@@ -821,6 +850,7 @@ export function RichTextEditor({
       Subscript,
       Superscript,
       ExtraKeyboardShortcuts,
+      GhostText,
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
@@ -853,8 +883,8 @@ export function RichTextEditor({
 
   return (
     <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
-      {editor && <Toolbar editor={editor} onBusy={setBusy} />}
-      {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} />}
+      {editor && <Toolbar editor={editor} onBusy={setBusy} autocomplete={autocomplete} onToggleAutocomplete={() => setAutocomplete((v) => !v)} />}
+      {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} autocomplete={autocomplete} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <EditorContent
           editor={editor}

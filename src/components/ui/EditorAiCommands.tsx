@@ -20,6 +20,7 @@ import {
   X,
 } from "lucide-react";
 import { Loader } from "@/components/prompt-kit/loader";
+import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
 
 type Command = {
@@ -70,7 +71,18 @@ function caretPos(editor: Editor): Pos {
  * improve, …); some open a prompt box that writes AI content into the note. Selecting text shows an "AI edit" button
  * that rewrites the selection from an instruction. Mounted inside RichTextEditor; `onBusy` dims the editor while running.
  */
-export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor; projectId?: string; onBusy: (label: string | null) => void }) {
+export function EditorAiCommands({
+  editor,
+  projectId,
+  onBusy,
+  autocomplete = false,
+}: {
+  editor: Editor;
+  projectId?: string;
+  onBusy: (label: string | null) => void;
+  /** When true, inline AI autocomplete suggests a continuation as grey text after a typing pause. */
+  autocomplete?: boolean;
+}) {
   const commands = projectId ? [BASE_COMMANDS[0], BASE_COMMANDS[1], ASK_COMMAND, ...BASE_COMMANDS.slice(2)] : BASE_COMMANDS;
 
   const [menu, setMenu] = useState<(Pos & { query: string }) | null>(null);
@@ -147,6 +159,69 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
   useEffect(() => {
     highlightedItem.current?.scrollIntoView({ block: "nearest" });
   }, [highlight]);
+
+  // Inline autocomplete: after an ~800ms typing pause, ask for a short continuation and show it as grey ghost text.
+  useEffect(() => {
+    if (!autocomplete) return;
+    let timer: number | undefined;
+    let controller: AbortController | null = null;
+
+    async function suggest() {
+      const { state } = editor;
+      const sel = state.selection;
+      if (!editor.isFocused || !sel.empty || menu || prompt) return;
+      const $from = sel.$from;
+      if ($from.parentOffset !== $from.parent.content.size) return; // only at the end of a block
+      if ($from.parent.type.name === "codeBlock") return;
+      const blockText = $from.parent.textContent;
+      if (blockText.trim().length < 2) return;
+      if (ghostTextKey.getState(state)) return; // one already showing
+      const md = editor.storage.markdown.getMarkdown() as string;
+      if (md.length > 6000) return; // cost guard
+      const fromAtRequest = sel.from;
+      controller?.abort();
+      controller = new AbortController();
+      try {
+        const res = await fetch("/api/ai/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "continue", text: md.slice(-4000) }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const body = await res.json().catch(() => ({}));
+        let text = String(body.text ?? "")
+          .replace(/^\s+/, "")
+          .split("\n")[0]
+          .replace(/^[#>*\-\s]+/, "")
+          .trim();
+        if (!text) return;
+        if (text.length > 160) text = `${text.slice(0, 160)}…`;
+        const suggestion = (/\s$/.test(blockText) || blockText.length === 0 ? "" : " ") + text;
+        // Only show it if the cursor hasn't moved since the request.
+        const live = editor.state.selection;
+        if (live.empty && live.from === fromAtRequest && !ghostTextKey.getState(editor.state)) {
+          editor.commands.setGhostText(suggestion);
+        }
+      } catch {
+        // aborted or network error — ignore
+      }
+    }
+
+    function schedule() {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void suggest(), 800);
+    }
+
+    editor.on("update", schedule);
+    return () => {
+      window.clearTimeout(timer);
+      controller?.abort();
+      editor.off("update", schedule);
+      editor.commands.clearGhostText();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autocomplete, editor]);
 
   /** Removes the trailing "/query" that opened the menu. Returns the caret position for anchoring a prompt box. */
   function clearSlash(): Pos {
