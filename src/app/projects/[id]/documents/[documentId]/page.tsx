@@ -1,4 +1,5 @@
 import { requirePagePermission } from "@/lib/auth/dal";
+import { can } from "@/lib/auth/permissions";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, Download, ExternalLink, File as FileIcon, FileText } from "lucide-react";
@@ -18,13 +19,14 @@ import { FilePreview } from "@/components/FilePreview";
 import { FileTypeTile } from "@/components/FileTypeTile";
 import { previewKindFor } from "@/lib/fileKind";
 import { DocumentActions } from "@/components/DocumentActions";
+import { DocumentAiPanel } from "@/components/DocumentAiPanel";
 
 export default async function DocumentDetailPage({
   params,
 }: {
   params: Promise<{ id: string; documentId: string }>;
 }) {
-  const { access } = await requirePagePermission("documents", "view");
+  const { user, access } = await requirePagePermission("documents", "view");
   const { id, documentId } = await params;
   const document = await getDocumentationById(id, documentId, access);
 
@@ -144,9 +146,14 @@ export default async function DocumentDetailPage({
           </div>
         )
       ) : (
-        <div className="rounded-xl border border-zinc-200 bg-white px-6 py-7 dark:border-zinc-800 dark:bg-zinc-900 sm:px-10 sm:py-9">
-          <MarkdownView content={document.content} />
-        </div>
+        <>
+          {can(user.permissions, "ai_project_assistant", "use") && document.content.trim() && (
+            <DocumentAiPanel projectId={id} documentId={documentId} />
+          )}
+          <div className="rounded-xl border border-zinc-200 bg-white px-6 py-7 dark:border-zinc-800 dark:bg-zinc-900 sm:px-10 sm:py-9">
+            <MarkdownView content={document.content} />
+          </div>
+        </>
       )}
     </div>
   );
