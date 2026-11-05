@@ -311,10 +311,47 @@ model Documentation {
   // Present only for source="upload": the original file (PDF, image, ...). `content` stays empty for those.
   file DocumentFile?
 
+  // RAG index for the per-project Ask AI: searchable chunks and the per-document index metadata.
+  chunks     DocumentChunk[]
+  indexState DocumentIndex?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([projectId, filePath])
+  @@index([projectId])
+}
+
+// One searchable chunk of a document, with its embedding vector (JSON-encoded float array, so no pgvector dependency).
+model DocumentChunk {
+  id         String        @id @default(cuid())
+  projectId  String
+  documentId String
+  document   Documentation @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  content    String
+  embedding  String
+  tokens     Int           @default(0)
+  createdAt  DateTime      @default(now())
+
+  @@index([projectId])
+  @@index([documentId])
+}
+
+// Per-document index metadata, so a document is only re-embedded when its text or the embedding model changes.
+model DocumentIndex {
+  documentId  String        @id
+  document    Documentation @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  projectId   String
+  // sha256 of the extracted text plus the embedding model name.
+  contentHash String
+  model       String
+  chunkCount  Int           @default(0)
+  // INDEXED | EMPTY | FAILED
+  status      String
+  error       String?
+  indexedAt   DateTime      @default(now()) @updatedAt
+
   @@index([projectId])
 }
 
