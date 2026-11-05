@@ -2,7 +2,23 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
-import { ArrowRight, BookOpen, CornerDownLeft, Maximize2, Minimize2, Scissors, Sparkles, WandSparkles, X } from "lucide-react";
+import {
+  ArrowRight,
+  BookOpen,
+  CalendarDays,
+  ClipboardList,
+  CornerDownLeft,
+  Flag,
+  ListChecks,
+  Maximize2,
+  Minimize2,
+  Scissors,
+  Sparkles,
+  Table2,
+  Target,
+  WandSparkles,
+  X,
+} from "lucide-react";
 import { Loader } from "@/components/prompt-kit/loader";
 import { cn } from "@/lib/cn";
 
@@ -11,23 +27,37 @@ type Command = {
   label: string;
   hint: string;
   icon: typeof Sparkles;
-  // "prompt": open an input (write / ask); "run": execute immediately.
-  run: "prompt-write" | "prompt-ask" | "continue" | ("improve" | "fix-grammar" | "shorten" | "lengthen");
+  // The action to run; see choose(). Prefixes: "note:" (note-tools), "tmpl:" (insert a template).
+  run: string;
 };
 
 const BASE_COMMANDS: Command[] = [
   { id: "write", label: "Write", hint: "Generate content from a prompt", icon: Sparkles, run: "prompt-write" },
   { id: "continue", label: "Continue writing", hint: "Pick up where the text ends", icon: ArrowRight, run: "continue" },
+  { id: "table", label: "Table", hint: "Generate a table from a prompt", icon: Table2, run: "prompt-table" },
+  { id: "summarize", label: "Summarize", hint: "Add a short summary of the note", icon: ClipboardList, run: "note:summarize" },
+  { id: "actions", label: "Action items", hint: "Extract a to-do checklist", icon: ListChecks, run: "note:action-items" },
   { id: "improve", label: "Improve", hint: "Rewrite and polish the whole note", icon: WandSparkles, run: "improve" },
   { id: "fix", label: "Fix grammar", hint: "Correct spelling and grammar", icon: Scissors, run: "fix-grammar" },
   { id: "shorten", label: "Make shorter", hint: "Tighten the note", icon: Minimize2, run: "shorten" },
   { id: "lengthen", label: "Make longer", hint: "Expand with more detail", icon: Maximize2, run: "lengthen" },
+  { id: "tmpl-meeting", label: "Template: Meeting notes", hint: "Insert a meeting-notes skeleton", icon: CalendarDays, run: "tmpl:meeting" },
+  { id: "tmpl-standup", label: "Template: Standup", hint: "Insert a standup skeleton", icon: CalendarDays, run: "tmpl:standup" },
+  { id: "tmpl-decision", label: "Template: Decision", hint: "Insert a decision-record skeleton", icon: Flag, run: "tmpl:decision" },
+  { id: "tmpl-prd", label: "Template: PRD", hint: "Insert a product-requirements skeleton", icon: Target, run: "tmpl:prd" },
 ];
+
+const TEMPLATES: Record<string, string> = {
+  meeting: "## Meeting notes\n\n**Date:** \n**Attendees:** \n\n### Agenda\n- \n\n### Discussion\n- \n\n### Decisions\n- \n\n### Action items\n- [ ] ",
+  standup: "## Standup\n\n**Yesterday**\n- \n\n**Today**\n- \n\n**Blockers**\n- ",
+  decision: "## Decision\n\n**Context**\n\n**Options considered**\n- \n\n**Decision**\n\n**Why**\n\n**Owner / date:** ",
+  prd: "# PRD\n\n## Problem\n\n## Goals\n- \n\n## Non-goals\n- \n\n## Requirements\n- \n\n## Success metrics\n- \n\n## Open questions\n- ",
+};
 
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
 type Pos = { top: number; left: number };
-type Prompt = { kind: "write" | "ask" | "custom"; selection?: { from: number; to: number } } & Pos;
+type Prompt = { kind: "write" | "ask" | "custom" | "table"; selection?: { from: number; to: number } } & Pos;
 
 function caretPos(editor: Editor): Pos {
   const { from } = editor.state.selection;
@@ -181,6 +211,30 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
     }
   }
 
+  async function runNote(action: string) {
+    const text = currentMarkdown();
+    if (!text.trim()) {
+      setError("Write something first, then use AI.");
+      return;
+    }
+    onBusy("Working on your note\u2026");
+    setError(null);
+    try {
+      const res = await fetch("/api/ai/note-tools", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, text }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
+      else appendMarkdown(body.text ?? "");
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      onBusy(null);
+    }
+  }
+
   function choose(cmd: Command) {
     const pos = clearSlash();
     closeMenu();
@@ -190,8 +244,15 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
     } else if (cmd.run === "prompt-ask") {
       setPromptValue("");
       setPrompt({ kind: "ask", ...pos });
+    } else if (cmd.run === "prompt-table") {
+      setPromptValue("");
+      setPrompt({ kind: "table", ...pos });
     } else if (cmd.run === "continue") {
       void runContinue();
+    } else if (cmd.run.startsWith("note:")) {
+      void runNote(cmd.run.slice(5));
+    } else if (cmd.run.startsWith("tmpl:")) {
+      appendMarkdown(TEMPLATES[cmd.run.slice(5)] ?? "");
     } else {
       void runTransform(cmd.run);
     }
@@ -225,6 +286,15 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
         const body = await res.json().catch(() => ({}));
         if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
         else editor.chain().focus().insertContentAt({ from, to }, body.text ?? "").run();
+      } else if (prompt.kind === "table") {
+        const res = await fetch("/api/ai/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "write", prompt: `Create a Markdown table for: ${value}. Output only the table.`, text: "" }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
+        else appendMarkdown(body.text ?? "");
       } else {
         const res = await fetch("/api/ai/compose", {
           method: "POST",
