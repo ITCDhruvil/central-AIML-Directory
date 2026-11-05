@@ -1,4 +1,5 @@
 import type { ProjectActivityWithProject } from "@/lib/projectActivity";
+import type { DigestNote } from "@/lib/dayNotes";
 import type { AIConfig, GenerateFn } from "@/lib/ai/types";
 
 export class DigestError extends Error {}
@@ -11,16 +12,22 @@ Rules:
 - Lead with what matters most. Group related items by project or theme.
 - Keep it skimmable Markdown: a few short bold headers with bullet points under them. No long paragraphs.
 - Be specific but brief. Mention project names. Don't just restate every line — summarize.
+- The input has two parts: activity events (what the system recorded) and daily notes (what people wrote). Use both.
 - Respond with ONLY a JSON object of this exact shape: {"summary": string}. No text outside the JSON object.`;
 
-export function buildDigestUserMessage(events: ProjectActivityWithProject[], days: number): string {
-  const lines = events.map((e) => `- [${e.projectName}] ${e.title} (${e.createdAt.slice(0, 10)})`).join("\n");
-  return `Here are the ${events.length} most recent activity events from the last ${days} days:\n\n${lines}\n\nWrite the team's weekly update.`;
+export function buildDigestUserMessage(events: ProjectActivityWithProject[], days: number, notes: DigestNote[] = []): string {
+  const eventLines = events.map((e) => `- [${e.projectName}] ${e.title} (${e.createdAt.slice(0, 10)})`).join("\n");
+  let message = `Activity events from the last ${days} days (${events.length}):\n\n${eventLines || "(none)"}`;
+  if (notes.length > 0) {
+    const noteLines = notes.map((n) => `- [${n.label} \u00b7 ${n.day}] ${n.content.replace(/\s+/g, " ").slice(0, 300)}`).join("\n");
+    message += `\n\nDaily notes people wrote (${notes.length}):\n\n${noteLines}`;
+  }
+  return `${message}\n\nWrite the team's weekly update from both the activity and the notes.`;
 }
 
 /** Turns recent activity into a short team digest. `generate` is injected so this is testable without network access. */
-export async function writeDigest(events: ProjectActivityWithProject[], days: number, config: AIConfig, generate: GenerateFn): Promise<string> {
-  const raw = await generate(SYSTEM_PROMPT, buildDigestUserMessage(events, days), config);
+export async function writeDigest(events: ProjectActivityWithProject[], days: number, config: AIConfig, generate: GenerateFn, notes: DigestNote[] = []): Promise<string> {
+  const raw = await generate(SYSTEM_PROMPT, buildDigestUserMessage(events, days, notes), config);
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);

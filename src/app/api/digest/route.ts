@@ -2,6 +2,8 @@ import { guardedAi } from "@/lib/ai/guard";
 import { apiAuthorize, denyUnlessFullAccess } from "@/lib/auth/dal";
 import { NextResponse } from "next/server";
 import { listActivitiesSince } from "@/lib/projectActivity";
+import { recentDayNotesForDigest } from "@/lib/dayNotes";
+import { addDays, todayDay } from "@/lib/dayDate";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModel } from "@/lib/ai/client";
 import { writeDigest, DigestError } from "@/lib/ai/digest";
@@ -21,8 +23,11 @@ async function handlePost() {
   if (denied) return denied;
 
   const since = new Date(Date.now() - DAYS * 24 * 60 * 60 * 1000);
-  const events = await listActivitiesSince(since, auth.access, MAX_EVENTS);
-  if (events.length === 0) {
+  const [events, notes] = await Promise.all([
+    listActivitiesSince(since, auth.access, MAX_EVENTS),
+    recentDayNotesForDigest(auth.user.id, addDays(todayDay(), -(DAYS - 1))),
+  ]);
+  if (events.length === 0 && notes.length === 0) {
     return NextResponse.json({ summary: "Nothing has changed across the directory in the last 7 days.", count: 0 });
   }
 
@@ -30,8 +35,8 @@ async function handlePost() {
   if (!config) return NextResponse.json({ error: "AI tools are not configured." }, { status: 503 });
 
   try {
-    const summary = await writeDigest(events, DAYS, config, callAssistantModel);
-    return NextResponse.json({ summary, count: events.length });
+    const summary = await writeDigest(events, DAYS, config, callAssistantModel, notes);
+    return NextResponse.json({ summary, count: events.length + notes.length });
   } catch (error) {
     if (error instanceof AIProviderError || error instanceof DigestError) {
       console.error("POST /api/digest AI error", error.message);

@@ -44,3 +44,33 @@ export async function listDayNotesInRange(scope: DayNoteScope, fromDay: string, 
   });
   return rows.map((r) => ({ day: r.day, content: r.content }));
 }
+
+export type DigestNote = { label: string; day: string; content: string };
+
+/**
+ * Recent day-notes for the dashboard digest: the viewer's own personal notes plus every project's log entries
+ * (the digest is only shown to full-access users). Project entries are labelled with the project's name.
+ */
+export async function recentDayNotesForDigest(userId: string, fromDay: string, limit = 200): Promise<DigestNote[]> {
+  const rows = await prisma.dayNote.findMany({
+    where: {
+      day: { gte: fromDay },
+      content: { not: "" },
+      OR: [
+        { scopeType: "USER", scopeId: userId },
+        { scopeType: "PROJECT" },
+      ],
+    },
+    orderBy: { day: "asc" },
+    take: limit,
+    select: { scopeType: true, scopeId: true, day: true, content: true },
+  });
+  const projectIds = [...new Set(rows.filter((r) => r.scopeType === "PROJECT").map((r) => r.scopeId))];
+  const projects = projectIds.length ? await prisma.project.findMany({ where: { id: { in: projectIds } }, select: { id: true, name: true } }) : [];
+  const nameById = new Map(projects.map((p) => [p.id, p.name]));
+  return rows.map((r) => ({
+    label: r.scopeType === "USER" ? "My notes" : (nameById.get(r.scopeId) ?? "A project"),
+    day: r.day,
+    content: r.content,
+  }));
+}
