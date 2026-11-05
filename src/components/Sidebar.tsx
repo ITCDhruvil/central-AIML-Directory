@@ -11,6 +11,7 @@ import {
   LogOut,
   Settings,
   ShieldCheck,
+  StickyNote,
   Sparkles,
   Users,
 } from "lucide-react";
@@ -53,12 +54,13 @@ const NAV_LINKS = [
     shortcut: "3",
     resource: "ideas",
   },
+  { href: "/notes", label: "My Notes", icon: StickyNote, shortcut: "4", resource: null },
   // Insights summarise the whole directory, so they need full (not "own") view access.
   {
     href: "/insights",
     label: "Insights",
     icon: Sparkles,
-    shortcut: "4",
+    shortcut: "5",
     resource: "insights",
   },
 ] as const;
