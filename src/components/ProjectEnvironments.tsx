@@ -1202,6 +1202,7 @@ export function ProjectEnvironments({
   const [envs, setEnvs] = useState(initial);
   const [adding, setAdding] = useState(false);
   const [showFill, setShowFill] = useState(false);
+  const [pingingAll, setPingingAll] = useState(false);
   const [error, setError] = useState("");
   const apiBase = `/api/projects/${projectId}/environments`;
 
@@ -1240,6 +1241,24 @@ export function ProjectEnvironments({
 
   const takenNames = envs.map((e) => e.name);
   const knownRoles = envs.flatMap((e) => e.credentials.map((c) => ({ purpose: c.purpose, icon: c.icon })));
+  const pingable = envs.filter((e) => e.healthUrl);
+
+  /** Checks every environment that has a health URL at once and updates all their badges together. */
+  async function pingAll() {
+    if (pingable.length === 0 || pingingAll) return;
+    setPingingAll(true);
+    setError("");
+    try {
+      const results = await Promise.allSettled(pingable.map((e) => call("POST", `${apiBase}/${e.id}/ping`)));
+      const updated = new Map<string, EnvironmentView>();
+      for (const r of results) if (r.status === "fulfilled" && r.value.environment) updated.set(r.value.environment.id, r.value.environment);
+      if (updated.size > 0) setEnvs((prev) => prev.map((e) => updated.get(e.id) ?? e));
+      const failed = results.filter((r) => r.status === "rejected").length;
+      if (failed > 0) setError(`${failed} environment${failed === 1 ? "" : "s"} could not be checked.`);
+    } finally {
+      setPingingAll(false);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -1259,6 +1278,11 @@ export function ProjectEnvironments({
                 CSV
               </Button>
             </>
+          )}
+          {canEdit && pingable.length > 0 && (
+            <Button variant="secondary" size="sm" icon={Activity} onClick={() => void pingAll()} loading={pingingAll} title="Check every environment's health URL now">
+              {pingingAll ? "Checking…" : "Check all"}
+            </Button>
           )}
           {canEdit && (
             <Button variant="secondary" size="sm" icon={Bookmark} onClick={() => setShowFill((v) => !v)} title="Set up one-click filling of login pages">
