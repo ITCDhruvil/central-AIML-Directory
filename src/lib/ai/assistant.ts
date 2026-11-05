@@ -4,7 +4,7 @@ import { buildProjectContext } from "@/lib/ai/contextBuilder";
 import { ASSISTANT_SYSTEM_PROMPT, buildAssistantUserMessage, type AssistantTurn } from "@/lib/ai/prompts";
 import { parseAssistantResponse } from "@/lib/ai/responseValidator";
 import { resolveCitations } from "@/lib/ai/citations";
-import type { AIConfig, AssistantAnswer, GenerateFn } from "@/lib/ai/types";
+import type { AIConfig, AssistantAnswer, ContextDocument, GenerateFn } from "@/lib/ai/types";
 
 export class AssistantResponseError extends Error {}
 
@@ -23,10 +23,29 @@ export async function answerProjectQuestion(
   generate: GenerateFn,
   history: AssistantTurn[] = [],
 ): Promise<AssistantAnswer> {
-  const built = buildProjectContext(
+  return answerFromContext(
+    project,
     documents.map((d) => ({ documentId: d.id, title: d.title, category: d.category, content: d.content })),
+    question,
+    config,
+    generate,
+    history,
   );
+}
 
+/**
+ * The shared core: given already-selected context documents (whole docs, or retrieved RAG chunks), build the context,
+ * ask the model and resolve citations. Both the plain and the RAG path go through here, so citations never diverge.
+ */
+export async function answerFromContext(
+  project: Project,
+  contextDocs: ContextDocument[],
+  question: string,
+  config: AIConfig,
+  generate: GenerateFn,
+  history: AssistantTurn[] = [],
+): Promise<AssistantAnswer> {
+  const built = buildProjectContext(contextDocs);
   const userMessage = buildAssistantUserMessage(project, built, question, history);
   const raw = await generate(ASSISTANT_SYSTEM_PROMPT, userMessage, config);
 

@@ -6,7 +6,8 @@ import { listDocumentation } from "@/lib/documents";
 import { ValidationError, validateAssistantHistory, validateAssistantQuestion } from "@/lib/validation";
 import { getAIConfig } from "@/lib/ai/config";
 import { callAssistantModel } from "@/lib/ai/client";
-import { answerProjectQuestion, AssistantResponseError } from "@/lib/ai/assistant";
+import { AssistantResponseError } from "@/lib/ai/assistant";
+import { answerWithRag } from "@/lib/ai/ragAssistant";
 import { AIProviderError } from "@/lib/ai/types";
 
 type RouteParams = { params: Promise<{ id: string }> };
@@ -58,7 +59,7 @@ async function handlePost(request: NextRequest, { params }: RouteParams) {
 
   try {
     const documents = await listDocumentation(project.id);
-    const result = await answerProjectQuestion(
+    const result = await answerWithRag(
       project,
       documents,
       question,
