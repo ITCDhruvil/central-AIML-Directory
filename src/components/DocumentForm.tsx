@@ -185,7 +185,7 @@ export function DocumentForm({
 
       <div>
         <span className={`${LABEL} mb-1.5`}>Content</span>
-        <RichTextEditor value={content} onChange={setContent} placeholder="Write the document. Use the toolbar for headings, lists, tables and more." className="min-h-[28rem]" />
+        <RichTextEditor value={content} onChange={setContent} projectId={projectId} placeholder="Type / for commands, or write the document…" className="min-h-[28rem]" />
         {errors.content && <p className="mt-1 text-xs text-red-600">{errors.content}</p>}
       </div>
 

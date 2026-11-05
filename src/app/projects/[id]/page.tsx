@@ -308,7 +308,7 @@ export default async function ProjectDetailPage({
           <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Daily log</h2>
           <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">A shared day-by-day log for this project. Everyone who can edit it writes here.</p>
         </div>
-        <DayNoteCalendar apiBase={`/api/projects/${project.id}/day-notes`} canEdit={canEditProject} canUseAi={can(user.permissions, "ai_text_transform", "use")} />
+        <DayNoteCalendar apiBase={`/api/projects/${project.id}/day-notes`} projectId={project.id} canEdit={canEditProject} canUseAi={can(user.permissions, "ai_text_transform", "use")} />
       </section>
     </div>
   );

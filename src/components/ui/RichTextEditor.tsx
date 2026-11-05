@@ -60,6 +60,7 @@ import {
 import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { cn } from "@/lib/cn";
 import { cleanPastedHtml } from "@/lib/cleanPastedHtml";
+import { EditorAiCommands } from "@/components/ui/EditorAiCommands";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   TEXT_TRANSFORM_LANGUAGES,
@@ -795,11 +796,14 @@ export function RichTextEditor({
   onChange,
   placeholder,
   className,
+  projectId,
 }: {
   value: string;
   onChange: (markdown: string) => void;
   placeholder?: string;
   className?: string;
+  /** When set, slash commands include "Ask the docs" (RAG over this project's documents). */
+  projectId?: string;
 }) {
   // Set while an AI action is rewriting the text: shows the status over the text area and blocks typing meanwhile.
   const [busy, setBusy] = useState<string | null>(null);
@@ -850,6 +854,7 @@ export function RichTextEditor({
   return (
     <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
       {editor && <Toolbar editor={editor} onBusy={setBusy} />}
+      {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <EditorContent
           editor={editor}

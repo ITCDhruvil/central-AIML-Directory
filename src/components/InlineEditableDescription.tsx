@@ -54,7 +54,8 @@ export function InlineEditableDescription({ project }: { project: Project }) {
         <RichTextEditor
           value={value}
           onChange={setValue}
-          placeholder="Describe the project"
+          projectId={project.id}
+          placeholder="Type / for commands, or describe the project"
           className="min-h-[16rem]"
         />
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

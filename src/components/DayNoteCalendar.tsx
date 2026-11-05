@@ -25,7 +25,7 @@ const NOTE_AI: { action: NoteAiAction; label: string; icon: typeof Sparkles; hea
  * A month calendar backed by day-notes. `apiBase` is the scope's endpoint ("/api/me/day-notes" or
  * "/api/projects/<id>/day-notes"). Days with an entry get a dot; clicking a day opens its note in the rich editor.
  */
-export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false }: { apiBase: string; canEdit: boolean; canUseAi?: boolean }) {
+export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId }: { apiBase: string; canEdit: boolean; canUseAi?: boolean; projectId?: string }) {
   // `today` is resolved on the client so the highlight matches the viewer's own date.
   const [today] = useState(() => todayDay());
   const [month, setMonth] = useState(() => monthOf(today));
@@ -307,7 +307,8 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false }: { apiBas
             key={selected}
             value={content}
             onChange={setContent}
-            placeholder={`What happened on ${dayLabel(selected)}? Notes, decisions, to-dos…`}
+            projectId={projectId}
+            placeholder={`Type / for commands, or note what happened on ${dayLabel(selected)}…`}
             className="min-h-[18rem]"
           />
         ) : content.trim() ? (
