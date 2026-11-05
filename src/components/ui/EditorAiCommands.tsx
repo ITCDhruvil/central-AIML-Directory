@@ -81,6 +81,7 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
   const [error, setError] = useState<string | null>(null);
   const [bubble, setBubble] = useState<Pos | null>(null);
   const promptInput = useRef<HTMLInputElement>(null);
+  const highlightedItem = useRef<HTMLButtonElement>(null);
 
   const filtered = menu ? commands.filter((c) => c.label.toLowerCase().replace(/\s/g, "").includes(menu.query.toLowerCase())) : [];
 
@@ -142,6 +143,10 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
   useEffect(() => {
     if (prompt) promptInput.current?.focus();
   }, [prompt]);
+
+  useEffect(() => {
+    highlightedItem.current?.scrollIntoView({ block: "nearest" });
+  }, [highlight]);
 
   /** Removes the trailing "/query" that opened the menu. Returns the caret position for anchoring a prompt box. */
   function clearSlash(): Pos {
@@ -343,11 +348,12 @@ export function EditorAiCommands({ editor, projectId, onBusy }: { editor: Editor
 
       {/* Slash command menu */}
       {menu && filtered.length > 0 && (
-        <div style={{ top: menu.top, left: menu.left }} className="fixed z-40 w-64 overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+        <div style={{ top: menu.top, left: menu.left }} className="fixed z-40 max-h-72 w-64 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           {filtered.map((cmd, i) => (
             <button
               key={cmd.id}
               type="button"
+              ref={i === highlight ? highlightedItem : null}
               onMouseEnter={() => setHighlight(i)}
               onMouseDown={(e) => {
                 e.preventDefault();
