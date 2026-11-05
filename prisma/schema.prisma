@@ -455,3 +455,21 @@ model ProjectNote {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }
+
+// A dated note entry — a day in someone's journal, or a day in a project's shared log. `day` is "YYYY-MM-DD" text to
+// avoid timezone drift. scope is loose (no FK), like Insight.scope: scopeType USER with a user id, or PROJECT with a
+// project id. One entry per (scope, day).
+model DayNote {
+  id         String   @id @default(cuid())
+  // USER | PROJECT
+  scopeType  String
+  scopeId    String
+  day        String
+  content    String   @default("")
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([scopeType, scopeId, day])
+  @@index([scopeType, scopeId, day])
+}
