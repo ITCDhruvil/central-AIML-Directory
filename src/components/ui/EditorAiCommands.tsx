@@ -3,7 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  ArrowDown,
+  ArrowLeft,
   ArrowRight,
+  ArrowUp,
   BookOpen,
   CalendarDays,
   ClipboardList,
@@ -14,8 +17,14 @@ import {
   Minimize2,
   Scissors,
   Sparkles,
+  PanelTopClose,
+  Rows3,
+  Columns3,
   Table2,
+  TableCellsMerge,
+  TableCellsSplit,
   Target,
+  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -92,10 +101,15 @@ export function EditorAiCommands({
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bubble, setBubble] = useState<Pos | null>(null);
+  const [tableBar, setTableBar] = useState<Pos | null>(null);
   const promptInput = useRef<HTMLInputElement>(null);
   const highlightedItem = useRef<HTMLButtonElement>(null);
 
   const filtered = menu ? commands.filter((c) => c.label.toLowerCase().replace(/\s/g, "").includes(menu.query.toLowerCase())) : [];
+  const grid = menu ? /^(\d{1,2})x(\d{1,2})$/i.exec(menu.query) : null;
+  const items: Command[] = grid
+    ? [{ id: "grid", label: `Insert ${grid[1]}\u00d7${grid[2]} table`, hint: `${grid[1]} columns \u00d7 ${grid[2]} rows`, icon: Table2, run: `grid:${grid[1]}:${grid[2]}` }]
+    : filtered;
 
   const closeMenu = useCallback(() => setMenu(null), []);
 
@@ -113,7 +127,7 @@ export function EditorAiCommands({
       setBubble(null);
       const $from = state.selection.$from;
       const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "￼");
-      const match = /(?:^|\s)\/([a-zA-Z]*)$/.exec(before);
+      const match = /(?:^|\s)\/([a-zA-Z0-9]*)$/.exec(before);
       if (match && prompt === null) {
         setMenu({ ...caretPos(editor), query: match[1] });
         setHighlight(0);
@@ -129,19 +143,49 @@ export function EditorAiCommands({
     };
   }, [editor, prompt]);
 
+  // A floating toolbar above the table when the cursor is inside one.
+  useEffect(() => {
+    function compute() {
+      if (!editor.isActive("table")) {
+        setTableBar(null);
+        return;
+      }
+      const node = editor.view.domAtPos(editor.state.selection.from).node;
+      const el = (node instanceof HTMLElement ? node : node.parentElement) ?? null;
+      const table = el?.closest("table");
+      if (!table) {
+        setTableBar(null);
+        return;
+      }
+      const r = table.getBoundingClientRect();
+      setTableBar({ top: r.top > 56 ? r.top - 40 : r.bottom + 6, left: r.left });
+    }
+    compute();
+    editor.on("selectionUpdate", compute);
+    editor.on("update", compute);
+    window.addEventListener("scroll", compute, true);
+    window.addEventListener("resize", compute);
+    return () => {
+      editor.off("selectionUpdate", compute);
+      editor.off("update", compute);
+      window.removeEventListener("scroll", compute, true);
+      window.removeEventListener("resize", compute);
+    };
+  }, [editor]);
+
   // Keyboard nav while the menu is open.
   useEffect(() => {
     if (!menu) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "ArrowDown") {
         e.preventDefault();
-        setHighlight((h) => Math.min(h + 1, filtered.length - 1));
+        setHighlight((h) => Math.min(h + 1, items.length - 1));
       } else if (e.key === "ArrowUp") {
         e.preventDefault();
         setHighlight((h) => Math.max(h - 1, 0));
       } else if (e.key === "Enter") {
         e.preventDefault();
-        const cmd = filtered[highlight];
+        const cmd = items[highlight];
         if (cmd) choose(cmd);
       } else if (e.key === "Escape") {
         closeMenu();
@@ -150,7 +194,7 @@ export function EditorAiCommands({
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [menu, filtered, highlight]);
+  }, [menu, items, highlight]);
 
   useEffect(() => {
     if (prompt) promptInput.current?.focus();
@@ -228,7 +272,7 @@ export function EditorAiCommands({
     const pos = caretPos(editor);
     const $from = editor.state.selection.$from;
     const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "￼");
-    const match = /\/([a-zA-Z]*)$/.exec(before);
+    const match = /\/([a-zA-Z0-9]*)$/.exec(before);
     if (match) {
       const start = editor.state.selection.from - match[0].length;
       editor.chain().focus().deleteRange({ from: start, to: editor.state.selection.from }).run();
@@ -333,6 +377,9 @@ export function EditorAiCommands({
       void runNote(cmd.run.slice(5));
     } else if (cmd.run.startsWith("tmpl:")) {
       appendMarkdown(TEMPLATES[cmd.run.slice(5)] ?? "");
+    } else if (cmd.run.startsWith("grid:")) {
+      const [, c, r] = cmd.run.split(":");
+      editor.chain().focus().insertTable({ rows: Number(r), cols: Number(c), withHeaderRow: true }).run();
     } else {
       void runTransform(cmd.run);
     }
@@ -402,10 +449,44 @@ export function EditorAiCommands({
     setPrompt({ kind: "custom", selection: { from, to }, top: pos.top, left: pos.left });
   }
 
+  const TB = "flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
+  const TB_DANGER = "flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-red-50 hover:text-red-600 dark:text-zinc-300 dark:hover:bg-red-500/10 dark:hover:text-red-400";
+  const tableButtons: { icon: typeof Sparkles; title: string; danger?: boolean; act: () => void }[] = [
+    { icon: ArrowUp, title: "Insert row above", act: () => editor.chain().focus().addRowBefore().run() },
+    { icon: ArrowDown, title: "Insert row below", act: () => editor.chain().focus().addRowAfter().run() },
+    { icon: ArrowLeft, title: "Insert column left", act: () => editor.chain().focus().addColumnBefore().run() },
+    { icon: ArrowRight, title: "Insert column right", act: () => editor.chain().focus().addColumnAfter().run() },
+    { icon: TableCellsMerge, title: "Merge cells", act: () => editor.chain().focus().mergeCells().run() },
+    { icon: TableCellsSplit, title: "Split cell", act: () => editor.chain().focus().splitCell().run() },
+    { icon: PanelTopClose, title: "Toggle header row", act: () => editor.chain().focus().toggleHeaderRow().run() },
+    { icon: Rows3, title: "Delete row", danger: true, act: () => editor.chain().focus().deleteRow().run() },
+    { icon: Columns3, title: "Delete column", danger: true, act: () => editor.chain().focus().deleteColumn().run() },
+    { icon: Trash2, title: "Delete table", danger: true, act: () => editor.chain().focus().deleteTable().run() },
+  ];
+
   const promptPlaceholder = prompt?.kind === "ask" ? "Ask about this project's documents…" : prompt?.kind === "custom" ? "How should AI change the selection?" : "Describe what to write…";
 
   return (
     <>
+      {/* Floating table toolbar (Word-like) */}
+      {tableBar && !prompt && (
+        <div style={{ top: tableBar.top, left: tableBar.left }} className="fixed z-40 flex items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
+          {tableButtons.map((b, i) => (
+            <button
+              key={i}
+              type="button"
+              title={b.title}
+              aria-label={b.title}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={b.act}
+              className={b.danger ? TB_DANGER : TB}
+            >
+              <b.icon size={15} />
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Selection → AI edit button */}
       {bubble && !prompt && (
         <button
@@ -422,9 +503,9 @@ export function EditorAiCommands({
       )}
 
       {/* Slash command menu */}
-      {menu && filtered.length > 0 && (
+      {menu && items.length > 0 && (
         <div style={{ top: menu.top, left: menu.left }} className="fixed z-40 max-h-72 w-64 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-          {filtered.map((cmd, i) => (
+          {items.map((cmd, i) => (
             <button
               key={cmd.id}
               type="button"
