@@ -1,4 +1,5 @@
 import { audit } from "@/lib/audit";
+import { indexDocumentById } from "@/lib/rag/indexer";
 import { apiAuthorize } from "@/lib/auth/dal";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
@@ -65,6 +66,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
 
     await audit({ action: "document.created", actorId: auth.user.id, entityType: "document", entityId: row.id, meta: { title: row.title, projectId: id }, request });
+    // Best-effort: index this document for the project RAG. Never fails the request.
+    await indexDocumentById(row.id).catch(() => {});
     return NextResponse.json({ document: toDocumentation(row) }, { status: 201 });
   } catch (error) {
     if (error instanceof ValidationError) {

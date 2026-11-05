@@ -104,3 +104,35 @@ export async function indexProject(projectId: string): Promise<ProjectIndexSumma
   }
   return summary;
 }
+
+export type ProjectIndexStatus = {
+  total: number;
+  indexed: number;
+  failed: number;
+  empty: number;
+  pending: number;
+  chunks: number;
+  lastIndexedAt: string | null;
+  configured: boolean;
+};
+
+/** A snapshot of how much of a project's documentation is indexed, for the UI. */
+export async function getProjectIndexStatus(projectId: string): Promise<ProjectIndexStatus> {
+  const [total, rows, chunks] = await Promise.all([
+    prisma.documentation.count({ where: { projectId } }),
+    prisma.documentIndex.findMany({ where: { projectId }, select: { status: true, chunkCount: true, indexedAt: true } }),
+    prisma.documentChunk.count({ where: { projectId } }),
+  ]);
+  const count = (s: string) => rows.filter((r) => r.status === s).length;
+  const last = rows.reduce<Date | null>((m, r) => (!m || r.indexedAt > m ? r.indexedAt : m), null);
+  return {
+    total,
+    indexed: count("INDEXED"),
+    failed: count("FAILED"),
+    empty: count("EMPTY"),
+    pending: total - rows.length,
+    chunks,
+    lastIndexedAt: last ? last.toISOString() : null,
+    configured: getAIConfig() !== null,
+  };
+}

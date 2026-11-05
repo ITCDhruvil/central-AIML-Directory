@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -133,14 +133,18 @@ function sizeOf(doc: DocumentRow): number {
   return doc.file?.size ?? -1;
 }
 
+type IndexStatus = { total: number; indexed: number; failed: number; empty: number; pending: number; chunks: number; configured: boolean };
+
 export function DocumentationPanel({
   projectId,
   documents,
   canCreate,
+  canIndex = false,
 }: {
   projectId: string;
   documents: DocumentRow[];
   canCreate: boolean;
+  canIndex?: boolean;
 }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +156,9 @@ export function DocumentationPanel({
   const [uploading, setUploading] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
   const [added, setAdded] = useState(0);
+  const [indexStatus, setIndexStatus] = useState<IndexStatus | null>(null);
+  const [indexing, setIndexing] = useState(false);
+  const [indexMsg, setIndexMsg] = useState<string | null>(null);
   const [removed, setRemoved] = useState(0);
   const canDelete = useCan("documents", "delete");
   const canEdit = useCan("documents", "edit");
@@ -309,6 +316,42 @@ export function DocumentationPanel({
     setPage(1);
   }
 
+  // Load the AI index status once (editors only).
+  useEffect(() => {
+    if (!canIndex) return;
+    let cancelled = false;
+    fetch(`/api/projects/${projectId}/index`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (!cancelled && body?.status) setIndexStatus(body.status);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [canIndex, projectId]);
+
+  async function indexAll() {
+    if (indexing) return;
+    setIndexing(true);
+    setIndexMsg(null);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/index`, { method: "POST" });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setIndexMsg(body.error ?? "Could not index the documents.");
+        return;
+      }
+      if (body.status) setIndexStatus(body.status);
+      const sm = body.summary;
+      if (sm) setIndexMsg(`Indexed ${sm.indexed}, skipped ${sm.skipped} unchanged${sm.failed ? `, ${sm.failed} failed` : ""}.`);
+    } catch {
+      setIndexMsg("Network error — please try again.");
+    } finally {
+      setIndexing(false);
+    }
+  }
+
   return (
     <section
       {...dropProps}
@@ -356,6 +399,23 @@ export function DocumentationPanel({
           </div>
         )}
       </header>
+
+      {canIndex && documents.length > 0 && (
+        <div className="mx-5 mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-zinc-200 bg-zinc-50/60 px-3 py-2 text-xs dark:border-zinc-800 dark:bg-zinc-800/40">
+          <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+            <Sparkles size={13} className="text-orange-500" />
+            {!indexStatus
+              ? "Ask AI index"
+              : !indexStatus.configured
+                ? "AI embeddings aren't configured, so Ask AI can't search documents."
+                : `Ask AI index: ${indexStatus.indexed} of ${indexStatus.total} documents${indexStatus.chunks ? ` \u00b7 ${indexStatus.chunks} chunks` : ""}${indexStatus.pending ? ` \u00b7 ${indexStatus.pending} not indexed yet` : ""}${indexStatus.failed ? ` \u00b7 ${indexStatus.failed} failed` : ""}`}
+            {indexMsg && <span className="ml-1 text-zinc-400">{indexMsg}</span>}
+          </span>
+          <Button size="sm" variant="secondary" icon={indexing ? undefined : Sparkles} loading={indexing} onClick={() => void indexAll()}>
+            {indexing ? "Indexing\u2026" : indexStatus && indexStatus.indexed > 0 ? "Reindex" : "Index for AI"}
+          </Button>
+        </div>
+      )}
 
       {(added > 0 || removed > 0 || problems.length > 0) && (
         <div className="mx-5 mb-3 space-y-1 rounded-lg bg-zinc-50 px-3 py-2 text-xs dark:bg-zinc-800/60">

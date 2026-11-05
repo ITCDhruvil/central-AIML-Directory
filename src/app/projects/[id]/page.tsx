@@ -271,6 +271,7 @@ export default async function ProjectDetailPage({
     <DocumentationPanel
       projectId={project.id}
       canCreate={canCreateDocument}
+      canIndex={canEditProject}
       // Only what the list shows: full document text would be sent to the browser for nothing.
       documents={documents.map((doc) => ({
         id: doc.id,
