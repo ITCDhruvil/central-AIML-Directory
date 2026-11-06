@@ -111,7 +111,6 @@ const EDITOR_CLASSES = [
   "[&_ul[data-type=taskList]_li>label]:mt-1 [&_ul[data-type=taskList]_li>div]:flex-1",
   "[&_sub]:align-sub [&_sub]:text-[0.75em] [&_sup]:align-super [&_sup]:text-[0.75em]",
   "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-zinc-400 [&_.is-empty::before]:content-[attr(data-placeholder)] dark:[&_.is-empty::before]:text-zinc-500",
-  "[&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:rounded-md [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:bg-blue-500/10",
 ].join(" ");
 
 const IS_MAC =
