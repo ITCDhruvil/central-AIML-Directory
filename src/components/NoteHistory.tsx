@@ -46,7 +46,7 @@ export function NoteHistory({ apiBase, noteKey, canRestore, onRestore, onClose }
       <div className="grid min-h-[20rem] gap-4 sm:grid-cols-[14rem_1fr]">
         <div className="max-h-[26rem] space-y-1 overflow-y-auto pr-1">
           {versions === null && <p className="text-sm text-zinc-400">Loading…</p>}
-          {versions?.length === 0 && <p className="text-sm text-zinc-400">No earlier copies yet. One is kept automatically when you change a note after a pause, or after a big edit.</p>}
+          {versions?.length === 0 && !error && <p className="text-sm text-zinc-400">No earlier copies yet. One is kept automatically when you change a note after a pause, or after a big edit.</p>}
           {versions?.map((v) => (
             <button
               key={v.id}
