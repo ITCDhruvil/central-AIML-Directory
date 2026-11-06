@@ -103,7 +103,7 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
       return;
     }
     setError(null);
-    setPicked({ url: src, name: src.split("/").pop()?.split("?")[0] || "link" });
+    setPicked({ url: src, name: src.startsWith("/api/media/") ? meta.label : src.split("/").pop()?.split("?")[0] || "link" });
   }
 
   function insert() {
