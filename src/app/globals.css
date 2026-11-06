@@ -459,8 +459,23 @@ input.autofill-clean:-webkit-autofill:focus {
   font-size: 0.75rem;
   color: #d97706;
 }
-.ProseMirror pre:has(> code.language-chart) {
-  max-height: 6.5rem;
+.ProseMirror pre.chart-source {
+  display: none;
+}
+.ProseMirror pre.chart-source.chart-editing {
+  display: block;
+  max-height: 14rem;
   overflow: auto;
-  opacity: 0.8;
+}
+.chart-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+.chart-actions button {
+  font-size: 0.75rem;
+  color: #a1a1aa;
+}
+.chart-actions button:hover {
+  color: #f97316;
 }

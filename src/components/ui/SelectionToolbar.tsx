@@ -63,6 +63,7 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
   const modeRef = useRef(mode);
   const dragging = useRef(false);
   const promptInput = useRef<HTMLInputElement>(null);
+  const box = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     modeRef.current = mode;
@@ -70,25 +71,35 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
 
   // Show the bar above a non-empty text selection; hide it while dragging, in code blocks, and on node selections.
   useEffect(() => {
+    function place(a: { top: number; bottom: number; left: number }, b: { top: number; bottom: number }) {
+      const above = Math.min(a.top, b.top) - 46;
+      setPos({
+        top: above >= 8 ? above : Math.max(a.bottom, b.bottom) + 8,
+        left: Math.max(8, Math.min(a.left, window.innerWidth - Math.min(WIDTH, window.innerWidth - 16) - 8)),
+      });
+    }
+
     function compute() {
-      if (dragging.current || modeRef.current !== "bar") {
-        if (modeRef.current === "bar") setPos(null);
+      const { state, view } = editor;
+      // While the AI menu is open the bar stays put on the selection it was opened for (and follows scroll/resize).
+      if (modeRef.current !== "bar") {
+        const r = range.current;
+        if (!r) return;
+        const max = state.doc.content.size;
+        place(view.coordsAtPos(Math.min(r.from, max)), view.coordsAtPos(Math.min(r.to, max)));
         return;
       }
-      const { state, view } = editor;
+      if (dragging.current) {
+        setPos(null);
+        return;
+      }
       const sel = state.selection;
       const isNode = Boolean((sel as unknown as { node?: unknown }).node);
       if (sel.empty || isNode || !editor.isFocused || sel.$from.parent.type.name === "codeBlock") {
         setPos(null);
         return;
       }
-      const a = view.coordsAtPos(sel.from);
-      const b = view.coordsAtPos(sel.to);
-      const above = Math.min(a.top, b.top) - 46;
-      setPos({
-        top: above >= 8 ? above : Math.max(a.bottom, b.bottom) + 8,
-        left: Math.max(8, Math.min(a.left, window.innerWidth - WIDTH - 8)),
-      });
+      place(view.coordsAtPos(sel.from), view.coordsAtPos(sel.to));
     }
     const dom = editor.view.dom;
     const down = () => {
@@ -121,6 +132,31 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
   useEffect(() => {
     if (mode === "prompt") promptInput.current?.focus();
   }, [mode]);
+
+  // The open AI menu closes when you click anywhere else, or press Escape.
+  useEffect(() => {
+    if (mode === "bar") return;
+    function onDown(e: MouseEvent) {
+      if (box.current && !box.current.contains(e.target as Node)) {
+        setMode("bar");
+        setPromptValue("");
+        setPos(null);
+      }
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape" && !running) {
+        setMode("bar");
+        setPromptValue("");
+        setPos(null);
+      }
+    }
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+    };
+  }, [mode, running]);
 
   function close() {
     setMode("bar");
@@ -221,8 +257,8 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
 
   return (
     <>
-      <div style={{ top: pos.top, left: pos.left, width: mode === "bar" ? undefined : WIDTH }} className="fixed z-40" onMouseDown={(e) => mode === "bar" && e.preventDefault()}>
-        <div className="flex w-fit items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+      <div ref={box} style={{ top: pos.top, left: pos.left, width: mode === "bar" ? undefined : WIDTH, maxWidth: "calc(100vw - 16px)" }} className="fixed z-40" onMouseDown={(e) => mode === "bar" && e.preventDefault()}>
+        <div className="flex w-fit max-w-full flex-wrap items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
           {fmt.map(button)}
           <span className="mx-0.5 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
           {blocks.map(button)}

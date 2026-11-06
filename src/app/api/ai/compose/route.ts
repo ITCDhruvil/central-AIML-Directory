@@ -30,7 +30,7 @@ async function handlePost(request: NextRequest) {
   if ((action === "write" || action === "custom") && !prompt) {
     return NextResponse.json({ error: "A prompt is required." }, { status: 400 });
   }
-  if ((action === "continue" || action === "custom") && !text.trim()) {
+  if ((action === "continue" || action === "custom" || action === "complete") && !text.trim()) {
     return NextResponse.json({ error: "There is no text to work with." }, { status: 400 });
   }
   if (prompt.length > MAX_PROMPT) return NextResponse.json({ error: `The prompt must be ${MAX_PROMPT} characters or fewer.` }, { status: 400 });
@@ -40,7 +40,9 @@ async function handlePost(request: NextRequest) {
   if (!config) return NextResponse.json({ error: "AI tools are not configured." }, { status: 503 });
 
   try {
-    const result = await compose({ action: action as ComposeAction, prompt, text }, config, callAssistantModel);
+    // Inline autocomplete only needs a few words, so it asks the model for far fewer tokens (faster and cheaper).
+    const effective = action === "complete" ? { ...config, maxOutputTokens: 60 } : config;
+    const result = await compose({ action: action as ComposeAction, prompt, text }, effective, callAssistantModel);
     return NextResponse.json({ text: result });
   } catch (error) {
     if (error instanceof AIProviderError || error instanceof ComposeError) {

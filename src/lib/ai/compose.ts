@@ -2,7 +2,7 @@ import type { AIConfig, GenerateFn } from "@/lib/ai/types";
 
 export class ComposeError extends Error {}
 
-export const COMPOSE_ACTIONS = ["write", "continue", "custom"] as const;
+export const COMPOSE_ACTIONS = ["write", "continue", "custom", "complete"] as const;
 export type ComposeAction = (typeof COMPOSE_ACTIONS)[number];
 
 const SYSTEM_PROMPT = `You write content for a rich-text note or document, from the user's instruction.
@@ -20,6 +20,9 @@ export function buildComposeMessage(input: ComposeInput): string {
   const text = input.text ?? "";
   if (input.action === "write") {
     return `Write content for this request:\n${input.prompt}\n\nExisting note, for style and context (may be empty):\n"""\n${text}\n"""`;
+  }
+  if (input.action === "complete") {
+    return `Continue the text with the next few words only: at most 15 words, finishing the current sentence if it is unfinished. Output only those words, no quotes, no repetition of the text.\n\nText:\n"""\n${text}\n"""`;
   }
   if (input.action === "continue") {
     return `Continue this text from exactly where it ends — same voice and formatting, no repetition of what's already there. Output only the continuation.\n\nText:\n"""\n${text}\n"""`;
