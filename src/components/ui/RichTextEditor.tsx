@@ -75,7 +75,7 @@ import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
 import { ColorTools } from "@/components/ui/ColorTools";
-import { AlignedHeading, AlignedParagraph, Highlight, TextColor, ALIGNMENTS, type Alignment } from "@/components/ui/ColorMarks";
+import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, ALIGNMENTS, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
 import { FindReplace } from "@/components/ui/FindReplace";
 import { MentionMenu } from "@/components/ui/MentionMenu";
@@ -460,6 +460,9 @@ const HEADING_LABEL_CLASS: Record<(typeof HEADING_LEVELS)[number], string> = {
   6: "text-xs font-medium leading-tight",
 };
 
+// Same keys as Google Docs. (Some browsers keep Ctrl+Shift+R and Ctrl+Shift+J for themselves.)
+const ALIGN_KEYS: Record<Alignment, string> = { left: "L", center: "E", right: "R", justify: "J" };
+
 const ALIGN_META: Record<Alignment, { label: string; icon: LucideIcon }> = {
   left: { label: "Align left", icon: AlignLeft },
   center: { label: "Align center", icon: AlignCenter },
@@ -487,6 +490,7 @@ function AlignMenu({ editor }: { editor: Editor }) {
           key={a}
           icon={ALIGN_META[a].icon}
           label={ALIGN_META[a].label}
+          shortcut={shortcutLabel(["Mod", "Shift", ALIGN_KEYS[a]])}
           active={current === a}
           onClick={() => {
             setAlignment(editor, a);
@@ -531,6 +535,42 @@ function HeadingsMenu({ editor }: { editor: Editor }) {
   );
 }
 
+const GRID_COLS = 10;
+const GRID_ROWS = 8;
+
+/** Word-style table size picker: move over the boxes to choose columns and rows, click to insert. */
+function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }) {
+  const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
+  return (
+    <div className="px-3 pb-2 pt-2" onMouseLeave={() => setHover(null)}>
+      <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{hover ? `${hover.cols} \u00d7 ${hover.rows} table` : "Insert table"}</p>
+      <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 1.25rem)` }} role="grid" aria-label="Table size">
+        {Array.from({ length: GRID_ROWS * GRID_COLS }, (_, i) => {
+          const row = Math.floor(i / GRID_COLS) + 1;
+          const col = (i % GRID_COLS) + 1;
+          const on = hover !== null && row <= hover.rows && col <= hover.cols;
+          return (
+            <button
+              key={i}
+              type="button"
+              role="gridcell"
+              aria-label={`${col} columns by ${row} rows`}
+              onMouseDown={(e) => e.preventDefault()}
+              onMouseEnter={() => setHover({ rows: row, cols: col })}
+              onFocus={() => setHover({ rows: row, cols: col })}
+              onClick={() => onPick(row, col)}
+              className={cn(
+                "h-5 w-5 rounded-[3px] border transition-colors",
+                on ? "border-orange-400 bg-orange-100 dark:border-orange-500 dark:bg-orange-500/25" : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900",
+              )}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function TableMenu({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
   const inTable = editor.isActive("table");
@@ -544,11 +584,7 @@ function TableMenu({ editor }: { editor: Editor }) {
   return (
     <SplitToolbarGroup label="Table" icon={Table2} active={inTable} open={open} onOpenChange={setOpen}>
       {!inTable && (
-        <MenuItemWithShortcut
-          icon={Table2}
-          label="Insert table"
-          onClick={() => run(() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run())}
-        />
+        <TableGridPicker onPick={(rows, cols) => run(() => editor.chain().focus().insertTable({ rows, cols, withHeaderRow: true }).run())} />
       )}
       {inTable && (
         <>
@@ -771,7 +807,7 @@ type ToolGroup = "autocomplete" | "lists" | "headings" | "align" | "color" | "bl
 
 // The order groups stay on the toolbar as it narrows: the toolbar is filled as far as it will go, and whatever is left
 // moves into the "..." menu instead of wrapping onto a second row.
-const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "align", "color", "autocomplete", "link", "image", "table", "blocks", "edit", "history"];
+const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "align", "table", "color", "autocomplete", "link", "image", "blocks", "edit", "history"];
 // Groups that have a divider in front of them when shown.
 const DIVIDED: ToolGroup[] = ["blocks", "edit", "history"];
 
@@ -976,10 +1012,10 @@ function Toolbar({
       {show("lists")}
       {show("headings")}
       {show("align")}
+      {show("table")}
       {show("color")}
 
       {show("blocks", true)}
-      {show("table")}
       {show("image")}
       {show("link")}
       {show("edit", true)}
@@ -1090,6 +1126,7 @@ export function RichTextEditor({
       AlignedHeading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       TextColor,
       Highlight,
+      AlignShortcuts,
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,

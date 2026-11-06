@@ -422,6 +422,7 @@ const SHORTCUTS: { group: string; rows: [string, string][] }[] = [
       ["Quote", "Ctrl Shift B"],
       ["Code block", "Ctrl Alt C"],
       ["Indent / outdent list item", "Tab / Shift Tab"],
+      ["Align left / center / right / justify", "Ctrl Shift L / E / R / J"],
     ],
   },
   {

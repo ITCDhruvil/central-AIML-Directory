@@ -1,4 +1,4 @@
-import { Mark } from "@tiptap/core";
+import { Extension, Mark } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
 import Heading from "@tiptap/extension-heading";
 
@@ -125,5 +125,15 @@ export const AlignedHeading = Heading.extend({
         parse: {},
       },
     };
+  },
+});
+
+/** Keyboard shortcuts for alignment: Ctrl/Cmd + Shift + L (left), E (center), R (right), J (justify). */
+export const AlignShortcuts = Extension.create({
+  name: "alignShortcuts",
+  addKeyboardShortcuts() {
+    const set = (align: Alignment) => () =>
+      this.editor.chain().focus().updateAttributes("paragraph", { textAlign: align }).updateAttributes("heading", { textAlign: align }).run();
+    return { "Mod-Shift-l": set("left"), "Mod-Shift-e": set("center"), "Mod-Shift-r": set("right"), "Mod-Shift-j": set("justify") };
   },
 });
