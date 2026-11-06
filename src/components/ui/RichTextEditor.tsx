@@ -231,7 +231,7 @@ function SplitToolbarGroup({
           "flex items-stretch overflow-hidden rounded transition-colors",
           highlighted
             ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
-            : "bg-zinc-200/80 text-zinc-500 hover:bg-zinc-300/80 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
+            : "bg-zinc-200/80 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400",
         )}
       >
         <button
@@ -242,7 +242,7 @@ function SplitToolbarGroup({
           aria-haspopup="menu"
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onOpenChange(!open)}
-          className="flex h-7 w-7 items-center justify-center"
+          className={cn("flex h-7 w-7 items-center justify-center transition-colors", highlighted ? "hover:bg-orange-200/70 dark:hover:bg-orange-500/30" : "hover:bg-zinc-300/80 dark:hover:bg-zinc-700")}
         >
           <Icon size={14} />
         </button>
@@ -255,8 +255,9 @@ function SplitToolbarGroup({
           onMouseDown={(e) => e.preventDefault()}
           onClick={() => onOpenChange(!open)}
           className={cn(
-            "flex h-7 w-5 items-center justify-center border-l",
-            highlighted ? "border-orange-200/80 dark:border-orange-500/30" : "border-zinc-200/80 dark:border-zinc-700/80",
+            "flex h-7 w-5 items-center justify-center border-l transition-colors",
+            highlighted ? "border-orange-200/80 dark:border-orange-500/30" : "border-zinc-300/60 dark:border-zinc-700/80",
+            highlighted ? "hover:bg-orange-200/70 dark:hover:bg-orange-500/30" : "hover:bg-zinc-300/80 dark:hover:bg-zinc-700",
           )}
         >
           <ChevronDown size={12} />
@@ -546,11 +547,17 @@ function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => v
   const customCols = Number(cols);
   const customRows = Number(rows);
   const customOk = Number.isInteger(customCols) && Number.isInteger(customRows) && customCols >= 1 && customCols <= 20 && customRows >= 1 && customRows <= 50;
-  const field = "h-7 w-14 rounded-md border border-zinc-300 bg-transparent px-2 text-center text-sm text-zinc-900 outline-none focus:border-orange-400 dark:border-zinc-600 dark:text-zinc-100";
+  const field =
+    "h-8 w-12 rounded-lg bg-zinc-100 text-center text-sm tabular-nums text-zinc-900 outline-none ring-1 ring-transparent transition focus:bg-white focus:ring-orange-400 dark:bg-zinc-800 dark:text-zinc-100 dark:focus:bg-zinc-900";
+  const insertCustom = () => customOk && onPick(customRows, customCols);
+
   return (
-    <div className="px-3 pb-2 pt-2" onMouseLeave={() => setHover(null)}>
-      <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{hover ? `${hover.cols} \u00d7 ${hover.rows} table` : "Insert table"}</p>
-      <div className="grid gap-[3px]" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, 1.25rem)` }} role="grid" aria-label="Table size">
+    <div className="w-[15.5rem] p-3" onMouseLeave={() => setHover(null)}>
+      <div className="mb-2.5 flex items-baseline justify-between">
+        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">Insert table</p>
+        <p className="text-xs tabular-nums text-zinc-400">{hover ? `${hover.cols} \u00d7 ${hover.rows}` : "Pick a size"}</p>
+      </div>
+      <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${GRID_COLS}, minmax(0, 1fr))` }} role="grid" aria-label="Table size">
         {Array.from({ length: GRID_ROWS * GRID_COLS }, (_, i) => {
           const row = Math.floor(i / GRID_COLS) + 1;
           const col = (i % GRID_COLS) + 1;
@@ -565,32 +572,26 @@ function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => v
               onMouseEnter={() => setHover({ rows: row, cols: col })}
               onFocus={() => setHover({ rows: row, cols: col })}
               onClick={() => onPick(row, col)}
-              className={cn(
-                "h-5 w-5 rounded-[3px] border transition-colors",
-                on ? "border-orange-400 bg-orange-100 dark:border-orange-500 dark:bg-orange-500/25" : "border-zinc-300 bg-white dark:border-zinc-600 dark:bg-zinc-900",
-              )}
+              className={cn("aspect-square rounded-[3px] transition-colors", on ? "bg-orange-400/80 dark:bg-orange-500/70" : "bg-zinc-200/80 dark:bg-zinc-700/60")}
             />
           );
         })}
       </div>
-      <div className="mt-3 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
-        <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">Custom size</p>
-        <div className="flex items-center gap-1.5">
-          <input value={cols} onChange={(e) => setCols(e.target.value)} inputMode="numeric" aria-label="Columns" className={field} onKeyDown={(e) => e.key === "Enter" && customOk && onPick(customRows, customCols)} />
-          <span className="text-xs text-zinc-400">cols \u00d7</span>
-          <input value={rows} onChange={(e) => setRows(e.target.value)} inputMode="numeric" aria-label="Rows" className={field} onKeyDown={(e) => e.key === "Enter" && customOk && onPick(customRows, customCols)} />
-          <span className="text-xs text-zinc-400">rows</span>
-          <button
-            type="button"
-            disabled={!customOk}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => onPick(customRows, customCols)}
-            className="ml-auto rounded-md bg-orange-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Insert
-          </button>
-        </div>
-        <p className="mt-1 text-[11px] text-zinc-400">Up to 20 columns and 50 rows.</p>
+      <div className="mt-3 flex items-center gap-2 border-t border-zinc-100 pt-3 dark:border-zinc-800">
+        <span className="text-xs text-zinc-500">Custom</span>
+        <input value={cols} onChange={(e) => setCols(e.target.value)} inputMode="numeric" aria-label="Columns" className={field} onKeyDown={(e) => e.key === "Enter" && insertCustom()} />
+        <span className="text-xs text-zinc-400">{"\u00d7"}</span>
+        <input value={rows} onChange={(e) => setRows(e.target.value)} inputMode="numeric" aria-label="Rows" className={field} onKeyDown={(e) => e.key === "Enter" && insertCustom()} />
+        <button
+          type="button"
+          disabled={!customOk}
+          title={customOk ? "Insert table" : "Up to 20 columns and 50 rows"}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={insertCustom}
+          className="ml-auto h-8 rounded-lg bg-zinc-900 px-3 text-xs font-medium text-white transition hover:bg-zinc-700 disabled:cursor-not-allowed disabled:opacity-40 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        >
+          Insert
+        </button>
       </div>
     </div>
   );
