@@ -10,6 +10,8 @@ import { Loader } from "@/components/prompt-kit/loader";
 import type { NoteAiAction } from "@/lib/ai/noteAi";
 import { cn } from "@/lib/cn";
 import { NoteHistory } from "@/components/NoteHistory";
+import { NamePageDialog } from "@/components/NamePageDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { dayLabel, monthCells, monthLabel, monthOf, shiftMonth, todayDay, weekKey } from "@/lib/dayDate";
 
 type SaveState = "idle" | "saving" | "saved" | "error";
@@ -48,6 +50,9 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
   const [pageId, setPageId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<PinnedItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [nameDialog, setNameDialog] = useState<{ mode: "new" } | { mode: "rename"; page: PageSummary } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<PageSummary | null>(null);
+  const [pageBusy, setPageBusy] = useState(false);
   const pageKey = scopeMode === "week" ? weekKey(selected) : selected;
   // Which note the editor is showing: the day's main note, or one of its (or the week's) pages.
   const noTarget = scopeMode === "week" && pageId === null;
@@ -234,35 +239,48 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
 
   const isPinned = pageId ? pinned.some((p) => p.kind === "page" && p.id === pageId) : pinned.some((p) => p.kind === "day" && p.day === selected);
 
-  async function addPage() {
-    const title = window.prompt("Name this page (you can leave it empty)", "");
-    if (title === null) return;
-    if (canEdit && !noTarget && content !== savedContent.current) await save(content);
-    const res = await fetch(`${apiBase}/pages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: pageKey, title }) });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setAiError(body.error ?? "Could not add the page.");
-      return;
+  async function createPage(title: string) {
+    setPageBusy(true);
+    try {
+      if (canEdit && !noTarget && content !== savedContent.current) await save(content);
+      const res = await fetch(`${apiBase}/pages`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key: pageKey, title }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setAiError(body.error ?? "Could not add the page.");
+        return;
+      }
+      setPages((prev) => [...prev, body.page]);
+      setPageId(body.page.id);
+    } finally {
+      setPageBusy(false);
+      setNameDialog(null);
     }
-    setPages((prev) => [...prev, body.page]);
-    setPageId(body.page.id);
   }
 
-  async function renamePage(page: PageSummary) {
-    const title = window.prompt("Page name", page.title);
-    if (title === null) return;
-    const res = await fetch(`${apiBase}/pages/${page.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
-    if (res.ok) setPages((prev) => prev.map((p) => (p.id === page.id ? { ...p, title: title.trim() } : p)));
+  async function renamePage(page: PageSummary, title: string) {
+    setPageBusy(true);
+    try {
+      const res = await fetch(`${apiBase}/pages/${page.id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title }) });
+      if (res.ok) setPages((prev) => prev.map((p) => (p.id === page.id ? { ...p, title } : p)));
+    } finally {
+      setPageBusy(false);
+      setNameDialog(null);
+    }
   }
 
   async function removePage(page: PageSummary) {
-    if (!window.confirm(`Delete ${page.title || "this page"}? This cannot be undone.`)) return;
-    const res = await fetch(`${apiBase}/pages/${page.id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    const rest = pages.filter((p) => p.id !== page.id);
-    setPages(rest);
-    if (pageId === page.id) setPageId(scopeMode === "week" ? (rest[0]?.id ?? null) : null);
-    loadPinned();
+    setPageBusy(true);
+    try {
+      const res = await fetch(`${apiBase}/pages/${page.id}`, { method: "DELETE" });
+      if (!res.ok) return;
+      const rest = pages.filter((p) => p.id !== page.id);
+      setPages(rest);
+      if (pageId === page.id) setPageId(scopeMode === "week" ? (rest[0]?.id ?? null) : null);
+      loadPinned();
+    } finally {
+      setPageBusy(false);
+      setDeleteTarget(null);
+    }
   }
 
   async function togglePin() {
@@ -444,21 +462,21 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
                   if (canEdit && !noTarget && content !== savedContent.current) void save(content);
                   setPageId(page.id);
                 }}
-                onDoubleClick={() => canEdit && void renamePage(page)}
+                onDoubleClick={() => canEdit && setNameDialog({ mode: "rename", page })}
                 title={canEdit ? "Double-click to rename" : undefined}
                 className="max-w-[10rem] truncate px-2.5 py-1"
               >
                 {page.title || `Page ${i + 1}`}
               </button>
               {canEdit && pageId === page.id && (
-                <button type="button" onClick={() => void removePage(page)} aria-label="Delete this page" className="mr-1 rounded p-0.5 text-zinc-400 hover:text-red-500">
+                <button type="button" onClick={() => setDeleteTarget(page)} aria-label="Delete this page" className="mr-1 rounded p-0.5 text-zinc-400 hover:text-red-500">
                   <X size={12} />
                 </button>
               )}
             </span>
           ))}
           {canEdit && (
-            <button type="button" onClick={() => void addPage()} title={scopeMode === "week" ? "Add a page for this week" : "Add a page to this day"} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
+            <button type="button" onClick={() => setNameDialog({ mode: "new" })} title={scopeMode === "week" ? "Add a page for this week" : "Add a page to this day"} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
               <Plus size={13} /> Page
             </button>
           )}
@@ -528,6 +546,25 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
           <p className="rounded-md border border-dashed border-zinc-300 px-4 py-10 text-center text-sm text-zinc-400 dark:border-zinc-700">No note for this day.</p>
         )}
         {canEdit && <p className="text-xs text-zinc-400">Notes save automatically. Use the toolbar for formatting and AI.</p>}
+        {nameDialog && (
+          <NamePageDialog
+            mode={nameDialog.mode}
+            initial={nameDialog.mode === "rename" ? nameDialog.page.title : ""}
+            where={scopeMode === "week" ? "this week" : dayLabel(selected)}
+            busy={pageBusy}
+            onSubmit={(title) => (nameDialog.mode === "new" ? void createPage(title) : void renamePage(nameDialog.page, title))}
+            onClose={() => setNameDialog(null)}
+          />
+        )}
+        <ConfirmDialog
+          open={deleteTarget !== null}
+          title="Delete this page?"
+          description={`${deleteTarget?.title || "This page"} and its earlier versions will be removed. This cannot be undone.`}
+          confirmLabel="Delete page"
+          loading={pageBusy}
+          onConfirm={() => deleteTarget && void removePage(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
+        />
         {historyOpen && <NoteHistory apiBase={apiBase} noteKey={target.noteKey} canRestore={canEdit} onRestore={(restored) => setContent(restored)} onClose={() => setHistoryOpen(false)} />}
       </div>
     </div>
