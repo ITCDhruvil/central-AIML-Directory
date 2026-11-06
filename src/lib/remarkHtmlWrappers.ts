@@ -1,8 +1,11 @@
 // Notes save text colour, highlight and alignment as tiny HTML wrappers (see components/ui/ColorMarks.ts):
-//   <span data-c="#2563eb">…</span>   <span data-h="#fde047">…</span>   <div align="center">…</div>
+//   <span data-c="#2563eb">…</span>   <span data-h="#fde047">…</span>   <span data-s="lg">…</span>
+//   <div align="center" dir="rtl" data-ls="1.5" data-ind="2">…</div>   (see lib/blockFormat.ts)
 // Raw HTML is never rendered by the Markdown views. Instead this remark plugin recognises exactly these three
 // wrappers, with exactly these attribute values, and turns them into styled nodes; any other HTML is left as it was
 // (and so still not shown). Pure (no DOM) so it can be tested.
+
+import { blockStyle, parseOpenTag } from "@/lib/blockFormat";
 
 type MdNode = {
   type: string;
@@ -13,7 +16,7 @@ type MdNode = {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const SPAN_OPEN = /^<span data-(c|h)="(#[0-9a-fA-F]{6})">$/;
-const DIV_OPEN = /^<div align="(left|center|right|justify)">$/;
+const SIZE_OPEN = /^<span data-s="(sm|lg|xl)">$/;
 
 type Opened = { tag: "span" | "div"; props: Record<string, unknown> };
 
@@ -25,8 +28,14 @@ function openOf(node: MdNode): Opened | null {
     const hex = span[2].toLowerCase();
     return { tag: "span", props: { className: [span[1] === "c" ? "tc" : "hl"], style: `--c:${hex}`, "data-wrapper": span[1] } };
   }
-  const div = DIV_OPEN.exec(value);
-  if (div) return { tag: "div", props: { style: `text-align:${div[1]}` } };
+  const size = SIZE_OPEN.exec(value);
+  if (size) return { tag: "span", props: { className: ["ts", `ts-${size[1]}`], "data-wrapper": "s" } };
+  const block = parseOpenTag(value);
+  if (block) {
+    const props: Record<string, unknown> = { style: blockStyle(block) };
+    if (block.dir) props.dir = "rtl";
+    return { tag: "div", props };
+  }
   return null;
 }
 

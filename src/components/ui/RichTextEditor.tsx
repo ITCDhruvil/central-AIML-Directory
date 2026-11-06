@@ -49,6 +49,8 @@ import {
   Smile,
   Sparkles,
   AlignCenter,
+  ALargeSmall,
+  ArrowUpDown,
   AlignJustify,
   AlignLeft,
   AlignRight,
@@ -75,7 +77,7 @@ import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
 import { ColorTools } from "@/components/ui/ColorTools";
-import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, ALIGNMENTS, type Alignment } from "@/components/ui/ColorMarks";
+import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, TextSize, ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, blockFormatAt, setBlockFormat, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
 import { FindReplace } from "@/components/ui/FindReplace";
 import { MentionMenu } from "@/components/ui/MentionMenu";
@@ -434,6 +436,18 @@ function ListsMenu({ editor }: { editor: Editor }) {
         active={editor.isActive("taskList")}
         onClick={() => run(() => editor.chain().focus().toggleTaskList().run())}
       />
+          {editor.isActive("orderedList") && (
+        <MenuItemWithShortcut
+          icon={ListOrdered}
+          label="Start numbering at…"
+          onClick={() => run(() => {
+            const current = String(editor.getAttributes("orderedList").start ?? 1);
+            const entered = window.prompt("Start numbering at", current);
+            const n = entered === null ? NaN : Number(entered);
+            if (Number.isInteger(n) && n >= 0 && n <= 9999) editor.chain().focus().updateAttributes("orderedList", { start: n }).run();
+          })}
+        />
+      )}
     </SplitToolbarGroup>
   );
 }
@@ -469,13 +483,66 @@ const ALIGN_META: Record<Alignment, { label: string; icon: LucideIcon }> = {
   justify: { label: "Justify", icon: AlignJustify },
 };
 
-function currentAlignment(editor: Editor): Alignment {
-  const value = (editor.getAttributes("heading").textAlign ?? editor.getAttributes("paragraph").textAlign) as string | undefined;
-  return (ALIGNMENTS as readonly string[]).includes(value ?? "") ? (value as Alignment) : "left";
+const currentAlignment = (editor: Editor): Alignment => blockFormatAt(editor).align;
+const setAlignment = (editor: Editor, align: Alignment) => setBlockFormat(editor, { textAlign: align });
+
+const SIZE_OPTIONS: { value: "sm" | null | "lg" | "xl"; label: string; className: string }[] = [
+  { value: "sm", label: "Small", className: "text-xs" },
+  { value: null, label: "Normal", className: "text-sm" },
+  { value: "lg", label: "Large", className: "text-base" },
+  { value: "xl", label: "Huge", className: "text-lg font-semibold" },
+];
+
+function setTextSize(editor: Editor, value: "sm" | "lg" | "xl" | null) {
+  if (value) editor.chain().focus().setMark("textSize", { size: value }).run();
+  else editor.chain().focus().unsetMark("textSize").run();
 }
 
-function setAlignment(editor: Editor, align: Alignment) {
-  editor.chain().focus().updateAttributes("paragraph", { textAlign: align }).updateAttributes("heading", { textAlign: align }).run();
+/** Smaller or larger text for the selection. */
+function SizeMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const current = (editor.getAttributes("textSize").size as string | undefined) ?? null;
+  return (
+    <SplitToolbarGroup label="Text size" icon={ALargeSmall} active={current !== null} open={open} onOpenChange={setOpen}>
+      {SIZE_OPTIONS.map((o) => (
+        <MenuItemWithShortcut
+          key={o.label}
+          icon={ALargeSmall}
+          label={o.label}
+          labelClassName={o.className}
+          active={current === o.value}
+          onClick={() => {
+            setTextSize(editor, o.value);
+            setOpen(false);
+          }}
+        />
+      ))}
+    </SplitToolbarGroup>
+  );
+}
+
+const SPACING_LABEL: Record<string, string> = { "1": "Single", "1.15": "1.15", "1.5": "1.5", "2": "Double" };
+
+/** Line spacing, indent and text direction for the current paragraph. */
+function SpacingMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const f = blockFormatAt(editor);
+  const run = (fn: () => void) => {
+    fn();
+    setOpen(false);
+  };
+  return (
+    <SplitToolbarGroup label="Spacing, indent and direction" icon={ArrowUpDown} active={f.lineHeight !== null || f.indent > 0 || f.dir !== null} open={open} onOpenChange={setOpen}>
+      {LINE_HEIGHTS.map((h) => (
+        <MenuItemWithShortcut key={h} icon={ArrowUpDown} label={`Line spacing: ${SPACING_LABEL[h]}`} active={f.lineHeight === h} onClick={() => run(() => setBlockFormat(editor, { lineHeight: h === "1.15" ? null : h }))} />
+      ))}
+      <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+      <MenuItemWithShortcut icon={ListIndentIncrease} label="Indent paragraph" onClick={() => run(() => setBlockFormat(editor, { indent: Math.min(MAX_INDENT, f.indent + 1) }))} />
+      <MenuItemWithShortcut icon={ListIndentDecrease} label="Outdent paragraph" onClick={() => run(() => setBlockFormat(editor, { indent: Math.max(0, f.indent - 1) }))} />
+      <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+      <MenuItemWithShortcut icon={Languages} label="Right-to-left text" active={f.dir === "rtl"} onClick={() => run(() => setBlockFormat(editor, { dir: f.dir === "rtl" ? null : "rtl" }))} />
+    </SplitToolbarGroup>
+  );
 }
 
 function AlignMenu({ editor }: { editor: Editor }) {
@@ -827,11 +894,11 @@ function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | n
   );
 }
 
-type ToolGroup = "autocomplete" | "lists" | "headings" | "align" | "color" | "blocks" | "table" | "image" | "link" | "edit" | "history";
+type ToolGroup = "autocomplete" | "lists" | "headings" | "align" | "color" | "size" | "spacing" | "blocks" | "table" | "image" | "link" | "edit" | "history";
 
 // The order groups stay on the toolbar as it narrows: the toolbar is filled as far as it will go, and whatever is left
 // moves into the "..." menu instead of wrapping onto a second row.
-const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "align", "table", "color", "autocomplete", "link", "image", "blocks", "edit", "history"];
+const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "align", "table", "color", "size", "spacing", "autocomplete", "link", "image", "blocks", "edit", "history"];
 // Groups that have a divider in front of them when shown.
 const DIVIDED: ToolGroup[] = ["blocks", "edit", "history"];
 
@@ -919,6 +986,19 @@ function Toolbar({
       { icon: ListChecks, label: "To-do list", run: () => chain().toggleTaskList().run() },
     );
   }
+  if (!shown.has("size")) {
+    SIZE_OPTIONS.forEach((o) => text.push({ icon: ALargeSmall, label: `Text size: ${o.label}`, keep: true, run: () => setTextSize(editor, o.value) }));
+  }
+  if (!shown.has("spacing")) {
+    const f = blockFormatAt(editor);
+    text.push(
+      { icon: ArrowUpDown, label: "Line spacing: 1.5", keep: true, run: () => setBlockFormat(editor, { lineHeight: "1.5" }) },
+      { icon: ArrowUpDown, label: "Line spacing: normal", keep: true, run: () => setBlockFormat(editor, { lineHeight: null }) },
+      { icon: ListIndentIncrease, label: "Indent paragraph", keep: true, run: () => setBlockFormat(editor, { indent: Math.min(MAX_INDENT, f.indent + 1) }) },
+      { icon: ListIndentDecrease, label: "Outdent paragraph", keep: true, run: () => setBlockFormat(editor, { indent: Math.max(0, f.indent - 1) }) },
+      { icon: Languages, label: f.dir === "rtl" ? "Left-to-right text" : "Right-to-left text", keep: true, run: () => setBlockFormat(editor, { dir: f.dir === "rtl" ? null : "rtl" }) },
+    );
+  }
   if (!shown.has("align")) {
     ALIGNMENTS.forEach((a) => text.push({ icon: ALIGN_META[a].icon, label: ALIGN_META[a].label, keep: true, run: () => setAlignment(editor, a) }));
   }
@@ -987,6 +1067,8 @@ function Toolbar({
     headings: <HeadingsMenu editor={editor} />,
     align: <AlignMenu editor={editor} />,
     color: <ColorTools editor={editor} />,
+    size: <SizeMenu editor={editor} />,
+    spacing: <SpacingMenu editor={editor} />,
     blocks: (
       <>
         <ToolbarButton label="Quote" icon={Quote} active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
@@ -1038,6 +1120,8 @@ function Toolbar({
       {show("align")}
       {show("table")}
       {show("color")}
+      {show("size")}
+      {show("spacing")}
 
       {show("blocks", true)}
       {show("image")}
@@ -1150,6 +1234,7 @@ export function RichTextEditor({
       AlignedHeading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
       TextColor,
       Highlight,
+      TextSize,
       AlignShortcuts,
       Table.configure({ resizable: true }),
       TableRow,

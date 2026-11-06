@@ -823,3 +823,8 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
   width: fit-content;
   max-width: 100%;
 }
+
+/* Text sizes */
+.ts-sm { font-size: 0.8em; }
+.ts-lg { font-size: 1.3em; line-height: 1.3; }
+.ts-xl { font-size: 1.75em; line-height: 1.25; }

@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  Calendar,
+  Clock,
+  Smile,
   Info,
   Lightbulb,
   TriangleAlert,
@@ -37,6 +40,7 @@ import { createNodeFromContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
 import { insertBlock, type BlockKind } from "@/components/ui/blockInsert";
+import { formatDate, formatTime } from "@/components/ui/EditorExtras";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
@@ -59,6 +63,9 @@ const BASE_COMMANDS: Command[] = [
   { id: "grid-4x4", label: "Table 4 \u00d7 4", hint: "4 columns \u00d7 4 rows", icon: Table2, run: "grid:4:4" },
   { id: "grid-5x3", label: "Table 5 \u00d7 3", hint: "5 columns \u00d7 3 rows", icon: Table2, run: "grid:5:3" },
   { id: "grid-6x4", label: "Table 6 \u00d7 4", hint: "6 columns \u00d7 4 rows", icon: Table2, run: "grid:6:4" },
+  { id: "date", label: "Today's date", hint: "Insert the current date", icon: Calendar, run: "text:date" },
+  { id: "time", label: "Current time", hint: "Insert the time now", icon: Clock, run: "text:time" },
+  { id: "symbols", label: "Emoji and symbols", hint: "Pick a symbol, arrow or emoji", icon: Smile, run: "symbols" },
   { id: "media-image", label: "Image", hint: "Upload or link an image", icon: ImageIcon, run: "media:image" },
   { id: "media-video", label: "Video", hint: "Upload or link a video", icon: Video, run: "media:video" },
   { id: "media-audio", label: "Audio", hint: "Upload or link an audio clip", icon: AudioLines, run: "media:audio" },
@@ -584,6 +591,10 @@ export function EditorAiCommands({
     } else if (cmd.run === "prompt-chart") {
       setPromptValue("");
       setPrompt({ kind: "chart", ...pos });
+    } else if (cmd.run === "text:date" || cmd.run === "text:time") {
+      editor.chain().focus().insertContent(cmd.run === "text:date" ? formatDate() : formatTime()).run();
+    } else if (cmd.run === "symbols") {
+      editor.view.dom.dispatchEvent(new CustomEvent("open-symbols"));
     } else if (cmd.run.startsWith("block:")) {
       const kind = cmd.run.slice(6);
       if (kind === "embed") editor.view.dom.dispatchEvent(new CustomEvent("open-embed"));

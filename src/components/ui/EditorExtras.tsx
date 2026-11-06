@@ -5,6 +5,9 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
 import {
   AlertCircle,
+  Calendar,
+  Clock,
+  Smile,
   AtSign,
   ClipboardCopy,
   Ellipsis,
@@ -470,6 +473,55 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
+// Emoji and symbols
+// ---------------------------------------------------------------------------------------------------------------
+
+const SYMBOL_SETS: { title: string; chars: string[] }[] = [
+  { title: "Faces and gestures", chars: ["\u{1F600}", "\u{1F603}", "\u{1F604}", "\u{1F601}", "\u{1F60A}", "\u{1F642}", "\u{1F609}", "\u{1F60D}", "\u{1F914}", "\u{1F60E}", "\u{1F622}", "\u{1F62D}", "\u{1F621}", "\u{1F44D}", "\u{1F44E}", "\u{1F44F}", "\u{1F64F}", "\u{1F4AA}", "\u{1F91D}", "\u{1F440}"] },
+  { title: "Work and status", chars: ["\u2705", "\u274C", "\u26A0\uFE0F", "\u{1F4A1}", "\u{1F4CC}", "\u{1F4CE}", "\u{1F4C5}", "\u{1F4DD}", "\u{1F4CA}", "\u{1F4C8}", "\u{1F4C9}", "\u{1F680}", "\u{1F41B}", "\u{1F512}", "\u{1F511}", "\u23F0", "\u{1F3AF}", "\u{1F4AC}", "\u{1F525}", "\u2B50", "\u{1F389}", "\u{1F3C6}", "\u2615", "\u2764\uFE0F"] },
+  { title: "Arrows", chars: ["\u2190", "\u2191", "\u2192", "\u2193", "\u2194", "\u2195", "\u21D0", "\u21D2", "\u21D4", "\u21A9", "\u21AA", "\u27F6", "\u2197", "\u2198"] },
+  { title: "Math", chars: ["\u00B1", "\u00D7", "\u00F7", "\u2260", "\u2248", "\u2264", "\u2265", "\u221E", "\u221A", "\u2211", "\u220F", "\u222B", "\u2202", "\u00B0", "\u2030", "\u00BD", "\u00BC", "\u00BE", "\u2153", "\u00B2", "\u00B3"] },
+  { title: "Currency", chars: ["$", "\u20AC", "\u00A3", "\u00A5", "\u20B9", "\u00A2"] },
+  { title: "Punctuation and marks", chars: ["\u00A9", "\u00AE", "\u2122", "\u00A7", "\u00B6", "\u2020", "\u2021", "\u2022", "\u2026", "\u2013", "\u2014", "\u00AB", "\u00BB", "\u201C", "\u201D", "\u2018", "\u2019"] },
+  { title: "Shapes and ticks", chars: ["\u25C6", "\u25C7", "\u25A0", "\u25A1", "\u25B2", "\u25BC", "\u2605", "\u2606", "\u2713", "\u2717", "\u2714", "\u2718", "\u25CF", "\u25CB"] },
+  { title: "Greek letters", chars: ["\u03B1", "\u03B2", "\u03B3", "\u03B4", "\u03BB", "\u03BC", "\u03C0", "\u03C3", "\u03C6", "\u03A9", "\u0394", "\u03A3"] },
+];
+
+/** A grid of emoji and symbols; pick one to put it at the cursor. */
+export function SymbolDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+  return (
+    <Modal title="Emoji and symbols" onClose={onClose}>
+      <div className="space-y-4">
+        {SYMBOL_SETS.map((set) => (
+          <div key={set.title}>
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">{set.title}</p>
+            <div className="flex flex-wrap gap-1">
+              {set.chars.map((c) => (
+                <button
+                  key={c}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    editor.chain().focus().insertContent(c).run();
+                    onClose();
+                  }}
+                  className="flex h-9 w-9 items-center justify-center rounded-lg text-lg text-zinc-800 hover:bg-zinc-100 dark:text-zinc-100 dark:hover:bg-zinc-800"
+                >
+                  {c}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+}
+
+export const formatDate = () => new Date().toLocaleDateString(undefined, { day: "numeric", month: "long", year: "numeric" });
+export const formatTime = () => new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+
+// ---------------------------------------------------------------------------------------------------------------
 // "More" menu: extra blocks, export, help
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -481,6 +533,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
   const [note, setNote] = useState<string | null>(null);
   const [embed, setEmbed] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
+  const [symbols, setSymbols] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   // Closes on a click elsewhere, but not on a click inside a popover opened from the menu (the colour picker).
   useEffect(() => {
@@ -510,13 +563,16 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
     };
     const onEmbed = () => setEmbed(true);
     const onShortcuts = () => setShortcuts(true);
+    const onSymbols = () => setSymbols(true);
     dom.addEventListener("keydown", onKey);
     dom.addEventListener("open-embed", onEmbed);
     dom.addEventListener("open-shortcuts", onShortcuts);
+    dom.addEventListener("open-symbols", onSymbols);
     return () => {
       dom.removeEventListener("keydown", onKey);
       dom.removeEventListener("open-embed", onEmbed);
       dom.removeEventListener("open-shortcuts", onShortcuts);
+      dom.removeEventListener("open-symbols", onSymbols);
     };
   }, [editor]);
 
@@ -535,6 +591,9 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
         { icon: Play, label: "Embed video or design", run: () => setEmbed(true) },
         { icon: Workflow, label: "Diagram with AI", run: () => editor.view.dom.dispatchEvent(new CustomEvent("open-ai-prompt", { detail: { kind: "diagram" } })) },
         { icon: Workflow, label: "Diagram (write code)", run: block("mermaid") },
+        { icon: Smile, label: "Emoji and symbols", run: () => setSymbols(true) },
+        { icon: Calendar, label: "Insert today's date", run: () => editor.chain().focus().insertContent(formatDate()).run() },
+        { icon: Clock, label: "Insert the time", run: () => editor.chain().focus().insertContent(formatTime()).run() },
         { icon: AtSign, label: "Mention a project or note", run: () => editor.chain().focus().insertContent("@").run() },
       ],
     },
@@ -603,6 +662,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
       )}
       {embed && <EmbedDialog editor={editor} onClose={() => setEmbed(false)} />}
       {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
+      {symbols && <SymbolDialog editor={editor} onClose={() => setSymbols(false)} />}
     </div>
   );
 }
