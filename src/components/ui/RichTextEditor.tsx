@@ -228,10 +228,10 @@ function SplitToolbarGroup({
     <div ref={ref} className="relative">
       <div
         className={cn(
-          "flex items-stretch overflow-hidden rounded border transition-colors",
+          "flex items-stretch overflow-hidden rounded transition-colors",
           highlighted
-            ? "border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400"
-            : "border-zinc-200 text-zinc-500 hover:bg-zinc-200/80 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800",
+            ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
+            : "bg-zinc-200/80 text-zinc-500 hover:bg-zinc-300/80 dark:bg-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-700",
         )}
       >
         <button
