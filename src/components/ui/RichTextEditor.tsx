@@ -541,6 +541,12 @@ const GRID_ROWS = 8;
 /** Word-style table size picker: move over the boxes to choose columns and rows, click to insert. */
 function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => void }) {
   const [hover, setHover] = useState<{ rows: number; cols: number } | null>(null);
+  const [cols, setCols] = useState("4");
+  const [rows, setRows] = useState("5");
+  const customCols = Number(cols);
+  const customRows = Number(rows);
+  const customOk = Number.isInteger(customCols) && Number.isInteger(customRows) && customCols >= 1 && customCols <= 20 && customRows >= 1 && customRows <= 50;
+  const field = "h-7 w-14 rounded-md border border-zinc-300 bg-transparent px-2 text-center text-sm text-zinc-900 outline-none focus:border-orange-400 dark:border-zinc-600 dark:text-zinc-100";
   return (
     <div className="px-3 pb-2 pt-2" onMouseLeave={() => setHover(null)}>
       <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">{hover ? `${hover.cols} \u00d7 ${hover.rows} table` : "Insert table"}</p>
@@ -566,6 +572,25 @@ function TableGridPicker({ onPick }: { onPick: (rows: number, cols: number) => v
             />
           );
         })}
+      </div>
+      <div className="mt-3 border-t border-zinc-100 pt-2.5 dark:border-zinc-800">
+        <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">Custom size</p>
+        <div className="flex items-center gap-1.5">
+          <input value={cols} onChange={(e) => setCols(e.target.value)} inputMode="numeric" aria-label="Columns" className={field} onKeyDown={(e) => e.key === "Enter" && customOk && onPick(customRows, customCols)} />
+          <span className="text-xs text-zinc-400">cols \u00d7</span>
+          <input value={rows} onChange={(e) => setRows(e.target.value)} inputMode="numeric" aria-label="Rows" className={field} onKeyDown={(e) => e.key === "Enter" && customOk && onPick(customRows, customCols)} />
+          <span className="text-xs text-zinc-400">rows</span>
+          <button
+            type="button"
+            disabled={!customOk}
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => onPick(customRows, customCols)}
+            className="ml-auto rounded-md bg-orange-500 px-2.5 py-1 text-xs font-medium text-white hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Insert
+          </button>
+        </div>
+        <p className="mt-1 text-[11px] text-zinc-400">Up to 20 columns and 50 rows.</p>
       </div>
     </div>
   );
