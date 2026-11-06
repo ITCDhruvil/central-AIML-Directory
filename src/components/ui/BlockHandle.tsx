@@ -172,6 +172,18 @@ export function BlockHandle({ editor }: { editor: Editor }) {
     const below = window.innerHeight - rect.bottom - 24;
     const above = rect.top - 24;
     const useBelow = below >= 260 || below >= above;
+    // Tall blocks (images, tables, video) open the menu beside them, so it never lands below the fold.
+    const tall = el instanceof HTMLElement ? el.querySelector("img, table, video") : null;
+    if (tall) {
+      const r = tall.getBoundingClientRect();
+      const room = window.innerWidth - r.right - 16;
+      const side = room >= 264 ? r.right + 16 : r.left - 16 - 256 >= 8 ? r.left - 16 - 256 : null;
+      if (side !== null) {
+        const h = Math.min(416, window.innerHeight - 16);
+        setMenu({ top: Math.max(8, Math.min(r.top, window.innerHeight - h - 8)), left: side, maxH: h });
+        return;
+      }
+    }
     const maxH = Math.max(180, Math.min(416, useBelow ? below : above));
     setMenu({
       // 8px of the selection tint spills outside the block, so leave room beyond it.

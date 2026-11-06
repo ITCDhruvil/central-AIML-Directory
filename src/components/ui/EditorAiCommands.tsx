@@ -629,6 +629,8 @@ export function EditorAiCommands({
     setRunning(true);
     setError(null);
     onBusy(prompt.kind === "ask" ? "Searching the documents…" : prompt.kind === "edit" ? "Editing…" : "Writing…", prompt.at ? prompt.at.from : -1);
+    // Hide the box right away; the shimmering status text on the line takes over while the AI works.
+    setPrompt(null);
     try {
       if (prompt.kind === "ask" && projectId) {
         const res = await fetch(`/api/projects/${projectId}/assistant`, {

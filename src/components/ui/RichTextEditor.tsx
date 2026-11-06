@@ -811,10 +811,28 @@ function Toolbar({
  * every other text field in the app, so storage and safe rendering
  * elsewhere (MarkdownView) don't change. Never stores or emits raw HTML.
  */
+/** The status phrases shown one after another while the AI works, so the wait feels alive. */
+function statusPhrases(label: string): string[] {
+  const l = label.toLowerCase();
+  if (l.startsWith("writing")) return ["Thinking\u2026", "Drafting\u2026", "Writing\u2026", "Polishing\u2026"];
+  if (l.startsWith("editing")) return ["Reading it\u2026", "Editing\u2026", "Polishing\u2026"];
+  if (l.startsWith("searching")) return ["Searching the documents\u2026", "Reading the sources\u2026", "Writing the answer\u2026"];
+  if (l.startsWith("continuing")) return ["Reading what you wrote\u2026", "Continuing\u2026", "Polishing\u2026"];
+  if (l.startsWith("building")) return ["Reading the table\u2026", "Choosing a chart\u2026", "Building the chart\u2026"];
+  return ["Thinking\u2026", label, "Polishing\u2026"];
+}
+
 /** A single shimmering status line ("Writing…") right where the AI content is about to appear. */
 function AiWritingSkeleton({ editor, label, pos }: { editor: Editor; label: string; pos?: number }) {
   const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
   const holder = useRef<HTMLDivElement>(null);
+  const phrases = statusPhrases(label);
+  const [step, setStep] = useState(0);
+  useEffect(() => {
+    // Move on every couple of seconds and stay on the last phrase until the AI finishes.
+    const timer = setInterval(() => setStep((n) => Math.min(n + 1, phrases.length - 1)), 2200);
+    return () => clearInterval(timer);
+  }, [phrases.length]);
   useEffect(() => {
     const parent = holder.current?.parentElement;
     if (!parent) return;
@@ -824,6 +842,13 @@ function AiWritingSkeleton({ editor, label, pos }: { editor: Editor; label: stri
     const pad = parseFloat(getComputedStyle(pm).paddingLeft) || 12;
     const size = editor.state.doc.content.size;
     // Rewriting the whole note starts at the top; otherwise it appears right below the anchor.
+    const node = pos !== undefined && pos >= 0 ? editor.state.doc.nodeAt(pos) : null;
+    if (node && node.type.name === "paragraph" && node.content.size === 0) {
+      // An empty line: the status text sits exactly where the placeholder was.
+      const c = editor.view.coordsAtPos(pos! + 1);
+      setAt({ top: c.top - box.top, left: c.left - box.left, width: pmBox.width - pad - 16 });
+      return;
+    }
     const top =
       pos === undefined
         ? 12
@@ -835,7 +860,7 @@ function AiWritingSkeleton({ editor, label, pos }: { editor: Editor; label: stri
     <div ref={holder} role="status" aria-live="polite" className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
       {at && (
         <div style={{ top: at.top, left: at.left, width: at.width }} className="absolute">
-          <TextShimmer className="text-sm font-medium">{label}</TextShimmer>
+          <TextShimmer key={step} className="ai-phrase text-sm font-medium">{phrases[step]}</TextShimmer>
         </div>
       )}
     </div>
@@ -929,6 +954,8 @@ export function RichTextEditor({
           className={cn(
             "min-h-0 flex-1 overflow-y-auto transition-opacity [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:h-full",
             busy && busy.pos === undefined && "opacity-40",
+            // The status text takes the placeholder's place while the AI is working.
+            busy && "[&_.is-empty::before]:opacity-0",
           )}
         />
         {busy && editor && <AiWritingSkeleton editor={editor} label={busy.label} pos={busy.pos} />}
