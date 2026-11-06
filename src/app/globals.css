@@ -534,8 +534,18 @@ input.autofill-clean:-webkit-autofill:focus {
 }
 
 /* A selected block: a light tint with some breathing room around the text (the shadow adds the padding without moving anything). */
-.ProseMirror .ProseMirror-selectednode:not([data-node-view-wrapper]) {
+.ProseMirror .ProseMirror-selectednode:not([data-node-view-wrapper]):not(:has([data-node-view-wrapper])) {
   border-radius: 2px;
   background: rgb(249 115 22 / 0.1);
   box-shadow: 0 0 0 0.5rem rgb(249 115 22 / 0.1);
+}
+
+/* Images show their own frame and handles; no tint behind them. */
+.ProseMirror .ProseMirror-selectednode:has([data-node-view-wrapper]),
+.ProseMirror [data-node-view-wrapper].ProseMirror-selectednode {
+  background: none;
+  box-shadow: none;
+}
+.ProseMirror [data-node-view-wrapper] img {
+  cursor: grab;
 }

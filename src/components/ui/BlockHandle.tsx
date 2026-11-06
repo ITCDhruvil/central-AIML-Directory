@@ -7,7 +7,15 @@ import { NodeSelection, TextSelection } from "@tiptap/pm/state";
 import {
   ArrowDown,
   ArrowLeftRight,
+  AlignCenter,
+  Check,
+  AlignLeft,
+  AlignRight,
   ArrowUp,
+  Crop,
+  Maximize2,
+  RefreshCw,
+  RotateCcw,
   ChartColumn,
   Code,
   Copy,
@@ -31,6 +39,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { exportCsv, fitAllColumns } from "@/components/ui/tableOps";
+import { buildImageSrc, parseImageSrc, type ImageAlign, type ImageOpts } from "@/lib/imageSrc";
 
 type Active = { pos: number; top: number; left: number };
 type Item = { id: string; label: string; icon: LucideIcon; group: string; run: () => void; danger?: boolean; toggle?: boolean; on?: boolean; keep?: boolean };
@@ -221,6 +230,33 @@ export function BlockHandle({ editor }: { editor: Editor }) {
         { id: "chart", label: "Chart with AI", icon: ChartColumn, group: "Table", run: () => editor.view.dom.dispatchEvent(new CustomEvent("chart-ai", { detail: { pos: pos + size } })) },
       );
     }
+    if (name === "image") {
+      const { opts } = parseImageSrc(String(node.attrs.src ?? ""));
+      const edit = (change: (o: ImageOpts) => ImageOpts) => () => {
+        const { base, opts: cur } = parseImageSrc(String(node.attrs.src ?? ""));
+        const tr = editor.state.tr.setNodeMarkup(pos, undefined, { ...node.attrs, src: buildImageSrc(base, change({ ...cur })) });
+        editor.view.dispatch(tr);
+      };
+      const maxW = () => {
+        const pm = editor.view.dom as HTMLElement;
+        const cs = getComputedStyle(pm);
+        return Math.round(pm.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight));
+      };
+      const align = (a: ImageAlign) => edit((o) => ({ ...o, a }));
+      const width = (ratio: number) => edit((o) => ({ ...o, w: Math.round(maxW() * ratio) }));
+      list.push(
+        { id: "al", label: "Align left", icon: AlignLeft, group: "Image", keep: true, on: (opts.a ?? "l") === "l", run: align("l") },
+        { id: "ac", label: "Align center", icon: AlignCenter, group: "Image", keep: true, on: opts.a === "c", run: align("c") },
+        { id: "ar", label: "Align right", icon: AlignRight, group: "Image", keep: true, on: opts.a === "r", run: align("r") },
+        { id: "w25", label: "Small (25%)", icon: Maximize2, group: "Size", keep: true, run: width(0.25) },
+        { id: "w50", label: "Medium (50%)", icon: Maximize2, group: "Size", keep: true, run: width(0.5) },
+        { id: "w75", label: "Large (75%)", icon: Maximize2, group: "Size", keep: true, run: width(0.75) },
+        { id: "w100", label: "Full width", icon: Maximize2, group: "Size", keep: true, run: width(1) },
+        { id: "crop", label: "Crop", icon: Crop, group: "Edit image", run: () => editor.view.dom.dispatchEvent(new CustomEvent("image-crop", { detail: { pos } })) },
+        { id: "replace", label: "Replace image", icon: RefreshCw, group: "Edit image", run: () => editor.view.dom.dispatchEvent(new CustomEvent("open-media", { detail: { kind: "image" } })) },
+        { id: "reset", label: "Reset size and crop", icon: RotateCcw, group: "Edit image", run: edit(() => ({})) },
+      );
+    }
     if (TEXT_BLOCKS.has(name) || name === "table") {
       list.push({
         id: "ai",
@@ -337,6 +373,7 @@ export function BlockHandle({ editor }: { editor: Editor }) {
                     >
                       <i.icon size={15} className={i.danger ? "" : "text-zinc-500 dark:text-zinc-400"} />
                       <span className="flex-1">{i.label}</span>
+                      {!i.toggle && i.on && <Check size={14} className="text-orange-500" />}
                       {i.toggle && (
                         <span className={cn("flex h-4 w-7 items-center rounded-full p-0.5 transition-colors", i.on ? "bg-orange-500" : "bg-zinc-300 dark:bg-zinc-600")}>
                           <span className={cn("h-3 w-3 rounded-full bg-white transition-transform", i.on && "translate-x-3")} />

@@ -1,9 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Image } from "@tiptap/extension-image";
 import { NodeViewWrapper, ReactNodeViewRenderer, type NodeViewProps } from "@tiptap/react";
-import { AlignCenter, AlignLeft, AlignRight, Check, Crop, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { ImageFigure } from "@/components/ImageFigure";
 import { buildImageSrc, parseImageSrc, type ImageAlign, type ImageCrop, type ImageOpts } from "@/lib/imageSrc";
 import { cn } from "@/lib/cn";
@@ -19,7 +19,7 @@ const cornerPos: Record<Corner, string> = {
 const MIN_W = 60;
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n));
 
-function ImageNodeView({ node, editor, selected, updateAttributes, deleteNode }: NodeViewProps) {
+function ImageNodeView({ node, editor, selected, updateAttributes, getPos }: NodeViewProps) {
   const src = String(node.attrs.src ?? "");
   const { base, opts } = parseImageSrc(src);
   const figure = useRef<HTMLDivElement>(null);
@@ -51,20 +51,26 @@ function ImageNodeView({ node, editor, selected, updateAttributes, deleteNode }:
     updateAttributes({ src: buildImageSrc(base, next) });
   }
 
-  function startResize(corner: Corner, e: React.PointerEvent) {
+  /** Resize from a corner or an edge. Width follows the pointer; the top and bottom edges scale by height. */
+  function startResize(side: Corner | "l" | "r" | "t" | "b", e: React.PointerEvent) {
     e.preventDefault();
     e.stopPropagation();
     const el = figure.current;
     if (!el) return;
+    const box = el.getBoundingClientRect();
     const startX = e.clientX;
-    const startW = el.getBoundingClientRect().width;
-    const dir = corner === "ne" || corner === "se" ? 1 : -1;
+    const startY = e.clientY;
+    const startW = box.width;
+    const ratio = box.height > 0 ? box.width / box.height : 1;
+    const right = side === "ne" || side === "se" || side === "r";
+    const vertical = side === "t" || side === "b";
     // A centred image grows from its middle, so the pointer moves twice as far as the edge does.
     const factor = opts.a === "c" ? 2 : 1;
     const limit = maxWidth();
     let w = startW;
     const move = (ev: PointerEvent) => {
-      w = clamp(startW + dir * (ev.clientX - startX) * factor, MIN_W, limit);
+      const delta = vertical ? (side === "b" ? 1 : -1) * (ev.clientY - startY) * ratio : (right ? 1 : -1) * (ev.clientX - startX);
+      w = clamp(startW + delta * factor, MIN_W, limit);
       setLiveW(w);
     };
     const up = () => {
@@ -128,9 +134,19 @@ function ImageNodeView({ node, editor, selected, updateAttributes, deleteNode }:
     setCrop(null);
   }
 
-  const showTools = selected && editable && !crop && liveW === null;
-  const btn = "flex h-7 w-7 items-center justify-center rounded-md hover:bg-white/15";
-  const presets: [string, number][] = [["S", 0.25], ["M", 0.5], ["L", 0.75]];
+  // The block menu's "Crop" asks this image to start cropping.
+  const startCropRef = useRef(startCrop);
+  useEffect(() => {
+    startCropRef.current = startCrop;
+  });
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onCrop = (e: Event) => {
+      if ((e as CustomEvent<{ pos: number }>).detail?.pos === getPos()) startCropRef.current();
+    };
+    dom.addEventListener("image-crop", onCrop);
+    return () => dom.removeEventListener("image-crop", onCrop);
+  }, [editor, getPos]);
 
   return (
     <NodeViewWrapper contentEditable={false} data-drag-handle>
@@ -143,6 +159,11 @@ function ImageNodeView({ node, editor, selected, updateAttributes, deleteNode }:
       >
         {selected && editable && !crop && (
           <div className="pointer-events-none absolute inset-0 rounded-lg ring-2 ring-orange-500">
+            {/* Edge grips: drag anywhere along a side, not just at the corners. */}
+            <span onPointerDown={(e) => startResize("l", e)} className="pointer-events-auto absolute -left-1 bottom-3 top-3 w-2 cursor-ew-resize" />
+            <span onPointerDown={(e) => startResize("r", e)} className="pointer-events-auto absolute -right-1 bottom-3 top-3 w-2 cursor-ew-resize" />
+            <span onPointerDown={(e) => startResize("t", e)} className="pointer-events-auto absolute -top-1 left-3 right-3 h-2 cursor-ns-resize" />
+            <span onPointerDown={(e) => startResize("b", e)} className="pointer-events-auto absolute -bottom-1 left-3 right-3 h-2 cursor-ns-resize" />
             {CORNERS.map((c) => (
               <span
                 key={c}
@@ -150,41 +171,6 @@ function ImageNodeView({ node, editor, selected, updateAttributes, deleteNode }:
                 className={cn("pointer-events-auto absolute h-3 w-3 rounded-sm border-2 border-white bg-orange-500 shadow", cornerPos[c])}
               />
             ))}
-          </div>
-        )}
-
-        {showTools && (
-          <div
-            onMouseDown={(e) => e.preventDefault()}
-            className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-lg bg-zinc-900/90 p-1 text-white shadow-xl backdrop-blur"
-          >
-            {([["l", AlignLeft, "Align left"], ["c", AlignCenter, "Align center"], ["r", AlignRight, "Align right"]] as const).map(([a, Icon, title]) => (
-              <button key={a} type="button" title={title} aria-label={title} onClick={() => patch({ a })} className={cn(btn, (opts.a ?? "l") === a && "bg-white/20 text-orange-300")}>
-                <Icon size={15} />
-              </button>
-            ))}
-            <span className="mx-0.5 h-4 w-px bg-white/20" />
-            {presets.map(([label, ratio]) => (
-              <button key={label} type="button" title={`${ratio * 100}% width`} onClick={() => patch({ w: Math.round(maxWidth() * ratio) })} className={cn(btn, "text-xs font-semibold")}>
-                {label}
-              </button>
-            ))}
-            <button type="button" title="Full width" onClick={() => patch({ w: maxWidth() })} className={cn(btn, "w-auto px-1.5 text-xs font-semibold")}>
-              Full
-            </button>
-            <span className="mx-0.5 h-4 w-px bg-white/20" />
-            <button type="button" title="Crop" aria-label="Crop" onClick={startCrop} className={btn}>
-              <Crop size={15} />
-            </button>
-            <button type="button" title="Replace image" aria-label="Replace image" onClick={() => editor.view.dom.dispatchEvent(new CustomEvent("open-media", { detail: { kind: "image" } }))} className={btn}>
-              <RefreshCw size={14} />
-            </button>
-            <button type="button" title="Reset size and crop" aria-label="Reset size and crop" onClick={() => patch({ w: null, c: null, a: null })} className={btn}>
-              <RotateCcw size={14} />
-            </button>
-            <button type="button" title="Delete" aria-label="Delete image" onClick={() => deleteNode()} className={cn(btn, "text-red-300")}>
-              <Trash2 size={15} />
-            </button>
           </div>
         )}
 
