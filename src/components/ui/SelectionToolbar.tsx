@@ -97,7 +97,9 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
       }
       const sel = state.selection;
       const isNode = Boolean((sel as unknown as { node?: unknown }).node);
-      if (sel.empty || isNode || !editor.isFocused || sel.$from.parent.type.name === "codeBlock") {
+      // Several selected table cells are a cell selection, not text: the text bar would sit on top of the table.
+      const isCells = "$anchorCell" in (sel as object);
+      if (sel.empty || isNode || isCells || !editor.isFocused || sel.$from.parent.type.name === "codeBlock") {
         setPos(null);
         return;
       }

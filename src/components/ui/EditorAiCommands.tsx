@@ -14,21 +14,10 @@ import {
   AudioLines,
   ImageIcon,
   Video,
-  ArrowDownAZ,
-  ArrowUpAZ,
-  ChevronUp,
-  Copy,
-  Download,
-  MoveHorizontal,
-  ArrowLeftRight,
   ChartColumn,
-  ChevronDown,
   ChartLine,
   ChartPie,
-  ArrowDown,
-  ArrowLeft,
   ArrowRight,
-  ArrowUp,
   BookOpen,
   CalendarDays,
   ClipboardList,
@@ -39,14 +28,8 @@ import {
   Minimize2,
   Scissors,
   Sparkles,
-  PanelTopClose,
-  Rows3,
-  Columns3,
   Table2,
-  TableCellsMerge,
-  TableCellsSplit,
   Target,
-  Trash2,
   WandSparkles,
   X,
 } from "lucide-react";
@@ -54,7 +37,6 @@ import { createNodeFromContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
 import { insertBlock, type BlockKind } from "@/components/ui/blockInsert";
-import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
@@ -149,9 +131,6 @@ export function EditorAiCommands({
   const [promptValue, setPromptValue] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tableBar, setTableBar] = useState<Pos | null>(null);
-  const [tableMenuOpen, setTableMenuOpen] = useState(false);
-  const tableBox = useRef<HTMLDivElement>(null);
   const promptInput = useRef<HTMLInputElement>(null);
   const promptBox = useRef<HTMLDivElement>(null);
   const highlightedItem = useRef<HTMLButtonElement>(null);
@@ -190,54 +169,6 @@ export function EditorAiCommands({
       editor.off("update", update);
     };
   }, [editor, prompt]);
-
-  // A floating toolbar above the table when the cursor is inside one.
-  useEffect(() => {
-    function compute() {
-      if (!editor.isActive("table")) {
-        setTableBar(null);
-        setTableMenuOpen(false);
-        return;
-      }
-      const node = editor.view.domAtPos(editor.state.selection.from).node;
-      const el = (node instanceof HTMLElement ? node : node.parentElement) ?? null;
-      const table = el?.closest("table");
-      if (!table) {
-        setTableBar(null);
-        return;
-      }
-      const r = table.getBoundingClientRect();
-      setTableBar({ top: r.top > 56 ? r.top - 40 : r.bottom + 6, left: Math.max(8, Math.min(r.right - 84, window.innerWidth - 232)) });
-    }
-    compute();
-    editor.on("selectionUpdate", compute);
-    editor.on("update", compute);
-    window.addEventListener("scroll", compute, true);
-    window.addEventListener("resize", compute);
-    return () => {
-      editor.off("selectionUpdate", compute);
-      editor.off("update", compute);
-      window.removeEventListener("scroll", compute, true);
-      window.removeEventListener("resize", compute);
-    };
-  }, [editor]);
-
-  // The table menu closes on a click elsewhere, Escape, or when the cursor leaves the table.
-  useEffect(() => {
-    if (!tableMenuOpen) return;
-    function onDown(e: MouseEvent) {
-      if (tableBox.current && !tableBox.current.contains(e.target as Node)) setTableMenuOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setTableMenuOpen(false);
-    }
-    document.addEventListener("mousedown", onDown, true);
-    document.addEventListener("keydown", onKey, true);
-    return () => {
-      document.removeEventListener("mousedown", onDown, true);
-      document.removeEventListener("keydown", onKey, true);
-    };
-  }, [tableMenuOpen]);
 
   // Keyboard nav while the menu is open.
   useEffect(() => {
@@ -494,10 +425,17 @@ export function EditorAiCommands({
       setPrompt({ kind, ...caretPos(editor) });
     };
     const onError = (e: Event) => setError(String((e as CustomEvent<string>).detail ?? "Something went wrong."));
+    // The block menu's chart items (bar, line, pie) chart the table the cursor is in.
+    const onChartType = (e: Event) => {
+      const type = (e as CustomEvent<{ type: ChartType }>).detail?.type;
+      if (type) chartFromTable(type);
+    };
+    dom.addEventListener("chart-type", onChartType);
     dom.addEventListener("open-ai-prompt", onPrompt);
     dom.addEventListener("editor-error", onError);
     return () => {
       dom.removeEventListener("open-ai-prompt", onPrompt);
+      dom.removeEventListener("chart-type", onChartType);
       dom.removeEventListener("editor-error", onError);
     };
   }, [editor]);
@@ -776,62 +714,6 @@ export function EditorAiCommands({
     }
   }
 
-  type TableItem = { icon: typeof Sparkles; label: string; act: () => void; danger?: boolean; closes?: boolean };
-  const tableGroups: { title: string; items: TableItem[] }[] = [
-    {
-      title: "Rows",
-      items: [
-        { icon: ArrowUp, label: "Insert row above", act: () => editor.chain().focus().addRowBefore().run() },
-        { icon: ArrowDown, label: "Insert row below", act: () => editor.chain().focus().addRowAfter().run() },
-        { icon: Rows3, label: "Delete row", danger: true, act: () => editor.chain().focus().deleteRow().run() },
-      ],
-    },
-    {
-      title: "Columns",
-      items: [
-        { icon: ArrowLeft, label: "Insert column left", act: () => editor.chain().focus().addColumnBefore().run() },
-        { icon: ArrowRight, label: "Insert column right", act: () => editor.chain().focus().addColumnAfter().run() },
-        { icon: Columns3, label: "Delete column", danger: true, act: () => editor.chain().focus().deleteColumn().run() },
-        { icon: MoveHorizontal, label: "Fit columns to content", act: () => fitAllColumns(editor, "content") },
-        { icon: ArrowLeftRight, label: "Make columns even", act: () => fitAllColumns(editor, "even") },
-      ],
-    },
-    {
-      title: "Arrange",
-      items: [
-        { icon: ChevronUp, label: "Move row up", act: () => moveRow(editor, -1) },
-        { icon: ChevronDown, label: "Move row down", act: () => moveRow(editor, 1) },
-        { icon: Copy, label: "Duplicate row", act: () => duplicateRow(editor) },
-        { icon: ArrowDownAZ, label: "Sort column A \u2192 Z", act: () => sortByColumn(editor, 1) },
-        { icon: ArrowUpAZ, label: "Sort column Z \u2192 A", act: () => sortByColumn(editor, -1) },
-      ],
-    },
-    {
-      title: "Cells",
-      items: [
-        { icon: TableCellsMerge, label: "Merge cells", act: () => editor.chain().focus().mergeCells().run() },
-        { icon: TableCellsSplit, label: "Split cell", act: () => editor.chain().focus().splitCell().run() },
-        { icon: PanelTopClose, label: "Toggle header row", act: () => editor.chain().focus().toggleHeaderRow().run() },
-      ],
-    },
-    {
-      title: "Chart",
-      items: [
-        { icon: Sparkles, label: "Chart with AI", closes: true, act: () => chartWithAiFromCursor() },
-        { icon: ChartColumn, label: "Bar chart", closes: true, act: () => chartFromTable("bar") },
-        { icon: ChartLine, label: "Line chart", closes: true, act: () => chartFromTable("line") },
-        { icon: ChartPie, label: "Pie chart", closes: true, act: () => chartFromTable("pie") },
-      ],
-    },
-    {
-      title: "Table",
-      items: [
-        { icon: Download, label: "Export as CSV", act: () => exportCsv(editor) },
-        { icon: Trash2, label: "Delete table", danger: true, closes: true, act: () => editor.chain().focus().deleteTable().run() },
-      ],
-    },
-  ];
-
   const promptPlaceholder =
     prompt?.kind === "ask"
       ? "Ask about this project's documents…"
@@ -849,56 +731,6 @@ export function EditorAiCommands({
 
   return (
     <>
-      {/* Table tools: a "Table" pill above the table that opens a labelled vertical menu */}
-      {tableBar && !prompt && (
-        <div ref={tableBox} style={{ top: tableBar.top, left: tableBar.left }} className="fixed z-40">
-          <button
-            type="button"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setTableMenuOpen((v) => !v)}
-            aria-expanded={tableMenuOpen}
-            className={cn(
-              "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium shadow-lg transition-colors",
-              tableMenuOpen
-                ? "border-orange-300 bg-white text-orange-600 dark:border-orange-500/50 dark:bg-zinc-900 dark:text-orange-400"
-                : "border-zinc-200 bg-white text-zinc-700 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
-            )}
-          >
-            <Table2 size={14} /> Table
-            <ChevronDown size={12} className={cn("transition-transform", tableMenuOpen && "rotate-180")} />
-          </button>
-          {tableMenuOpen && (
-            <div style={{ maxHeight: Math.min(416, Math.max(160, window.innerHeight - tableBar.top - 56)) }} className="mt-1.5 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-              {tableGroups.map((group, gi) => (
-                <div key={gi} className={cn(gi > 0 && "mt-1 border-t border-zinc-100 pt-1 dark:border-zinc-800")}>
-                  {group.title && <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">{group.title}</p>}
-                  {group.items.map((item) => (
-                    <button
-                      key={item.label}
-                      type="button"
-                      onMouseDown={(e) => e.preventDefault()}
-                      onClick={() => {
-                        item.act();
-                        if (item.closes) setTableMenuOpen(false);
-                      }}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-                        item.danger
-                          ? "text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                          : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800",
-                      )}
-                    >
-                      <item.icon size={15} className={item.danger ? "" : "text-zinc-500 dark:text-zinc-400"} />
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Slash command menu */}
       {menu && items.length > 0 && (
         <div style={{ top: menu.top, left: menu.left }} className="fixed z-40 max-h-72 w-64 overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">

@@ -8,6 +8,19 @@ import {
   ArrowDown,
   ArrowLeftRight,
   AlignCenter,
+  ArrowDownAZ,
+  ArrowLeft,
+  ArrowRight,
+  ArrowUpAZ,
+  ChartColumn,
+  ChartLine,
+  ChartPie,
+  ChevronDown,
+  ChevronUp,
+  Columns3,
+  Rows3,
+  TableCellsMerge,
+  TableCellsSplit,
   Check,
   AlignLeft,
   AlignRight,
@@ -16,7 +29,6 @@ import {
   Maximize2,
   RefreshCw,
   RotateCcw,
-  ChartColumn,
   Code,
   Copy,
   Download,
@@ -38,7 +50,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/cn";
-import { exportCsv, fitAllColumns } from "@/components/ui/tableOps";
+import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
 import { buildImageSrc, parseImageSrc, type ImageAlign, type ImageOpts } from "@/lib/imageSrc";
 
 type Active = { pos: number; top: number; left: number };
@@ -73,6 +85,8 @@ export function BlockHandle({ editor }: { editor: Editor }) {
   const searchRef = useRef<HTMLInputElement>(null);
   const [, setTick] = useState(0);
   const locked = useRef(false);
+  // The cursor's cell in the table when the menu was opened (table actions apply to it).
+  const [savedCell, setSavedCell] = useState<number | null>(null);
   useEffect(() => {
     locked.current = menu !== null;
   }, [menu]);
@@ -164,6 +178,10 @@ export function BlockHandle({ editor }: { editor: Editor }) {
 
   function openMenu() {
     if (!active) return;
+    const here = editor.state.selection;
+    const tableNode = editor.state.doc.nodeAt(active.pos);
+    // The cursor's cell, so table actions apply to it after the table itself is selected.
+    setSavedCell(tableNode?.type.name === "table" && here.from > active.pos && here.from < active.pos + tableNode.nodeSize ? here.from : null);
     editor.view.dispatch(editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, active.pos)));
     setQuery("");
     // Open below the block so the text stays visible; flip above when the space below is too small.
@@ -234,12 +252,36 @@ export function BlockHandle({ editor }: { editor: Editor }) {
     }
     if (name === "table") {
       const header = node.firstChild?.firstChild?.type.name === "tableHeader";
+      // Row, column and cell actions work on the cell the cursor was in before the menu opened.
+      const cell = (fn: () => void) => () => {
+        const at = Math.min(Math.max(savedCell ?? pos + 2, pos + 1), editor.state.doc.content.size);
+        editor.view.dispatch(editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(at))));
+        fn();
+      };
+      const c = () => editor.chain().focus();
+      const chart = (type: "bar" | "line" | "pie") => cell(() => editor.view.dom.dispatchEvent(new CustomEvent("chart-type", { detail: { type } })));
       list.push(
-        { id: "header", label: "Header row", icon: PanelTopClose, group: "Table", toggle: true, on: header, keep: true, run: () => (enter(pos), editor.chain().focus().toggleHeaderRow().run()) },
-        { id: "fit", label: "Fit columns to content", icon: MoveHorizontal, group: "Table", run: () => (enter(pos), fitAllColumns(editor, "content")) },
-        { id: "even", label: "Make columns even", icon: ArrowLeftRight, group: "Table", run: () => (enter(pos), fitAllColumns(editor, "even")) },
-        { id: "csv", label: "Export as CSV", icon: Download, group: "Table", run: () => (enter(pos), exportCsv(editor)) },
-        { id: "chart", label: "Chart with AI", icon: ChartColumn, group: "Table", run: () => editor.view.dom.dispatchEvent(new CustomEvent("chart-ai", { detail: { pos: pos + size } })) },
+        { id: "r-above", label: "Insert row above", icon: ArrowUp, group: "Rows", run: cell(() => c().addRowBefore().run()) },
+        { id: "r-below", label: "Insert row below", icon: ArrowDown, group: "Rows", run: cell(() => c().addRowAfter().run()) },
+        { id: "r-del", label: "Delete row", icon: Rows3, group: "Rows", danger: true, run: cell(() => c().deleteRow().run()) },
+        { id: "c-left", label: "Insert column left", icon: ArrowLeft, group: "Columns", run: cell(() => c().addColumnBefore().run()) },
+        { id: "c-right", label: "Insert column right", icon: ArrowRight, group: "Columns", run: cell(() => c().addColumnAfter().run()) },
+        { id: "c-del", label: "Delete column", icon: Columns3, group: "Columns", danger: true, run: cell(() => c().deleteColumn().run()) },
+        { id: "fit", label: "Fit columns to content", icon: MoveHorizontal, group: "Columns", run: cell(() => fitAllColumns(editor, "content")) },
+        { id: "even", label: "Make columns even", icon: ArrowLeftRight, group: "Columns", run: cell(() => fitAllColumns(editor, "even")) },
+        { id: "r-up", label: "Move row up", icon: ChevronUp, group: "Arrange", run: cell(() => moveRow(editor, -1)) },
+        { id: "r-down", label: "Move row down", icon: ChevronDown, group: "Arrange", run: cell(() => moveRow(editor, 1)) },
+        { id: "r-dup", label: "Duplicate row", icon: Copy, group: "Arrange", run: cell(() => duplicateRow(editor)) },
+        { id: "sort-az", label: "Sort column A \u2192 Z", icon: ArrowDownAZ, group: "Arrange", run: cell(() => sortByColumn(editor, 1)) },
+        { id: "sort-za", label: "Sort column Z \u2192 A", icon: ArrowUpAZ, group: "Arrange", run: cell(() => sortByColumn(editor, -1)) },
+        { id: "merge", label: "Merge cells", icon: TableCellsMerge, group: "Cells", run: cell(() => c().mergeCells().run()) },
+        { id: "split", label: "Split cell", icon: TableCellsSplit, group: "Cells", run: cell(() => c().splitCell().run()) },
+        { id: "header", label: "Header row", icon: PanelTopClose, group: "Cells", toggle: true, on: header, keep: true, run: cell(() => c().toggleHeaderRow().run()) },
+        { id: "chart-ai", label: "Chart with AI", icon: Sparkles, group: "Chart", run: () => editor.view.dom.dispatchEvent(new CustomEvent("chart-ai", { detail: { pos: pos + size } })) },
+        { id: "chart-bar", label: "Bar chart", icon: ChartColumn, group: "Chart", run: chart("bar") },
+        { id: "chart-line", label: "Line chart", icon: ChartLine, group: "Chart", run: chart("line") },
+        { id: "chart-pie", label: "Pie chart", icon: ChartPie, group: "Chart", run: chart("pie") },
+        { id: "csv", label: "Export as CSV", icon: Download, group: "Table", run: cell(() => exportCsv(editor)) },
       );
     }
     if (name === "image") {
@@ -311,7 +353,7 @@ export function BlockHandle({ editor }: { editor: Editor }) {
     );
     return list;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, node, menu, editor]);
+  }, [active, node, menu, editor, savedCell]);
 
   const shown = query.trim() ? items.filter((i) => i.label.toLowerCase().includes(query.trim().toLowerCase())) : items;
   const groups = [...new Set(shown.map((i) => i.group))];
