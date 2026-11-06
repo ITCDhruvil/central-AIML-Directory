@@ -61,6 +61,7 @@ import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { cn } from "@/lib/cn";
 import { cleanPastedHtml } from "@/lib/cleanPastedHtml";
 import { EditorAiCommands } from "@/components/ui/EditorAiCommands";
+import { SelectionToolbar } from "@/components/ui/SelectionToolbar";
 import { GhostText } from "@/components/ui/GhostText";
 import { ChartPreview } from "@/components/ui/ChartPreview";
 import { useClickOutside } from "@/lib/useClickOutside";
@@ -887,6 +888,7 @@ export function RichTextEditor({
     <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
       {editor && <Toolbar editor={editor} onBusy={setBusy} autocomplete={autocomplete} onToggleAutocomplete={() => setAutocomplete((v) => !v)} />}
       {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} autocomplete={autocomplete} />}
+      {editor && <SelectionToolbar editor={editor} onBusy={setBusy} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <EditorContent
           editor={editor}

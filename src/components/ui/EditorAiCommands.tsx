@@ -76,7 +76,7 @@ const TEMPLATES: Record<string, string> = {
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
 type Pos = { top: number; left: number };
-type Prompt = { kind: "write" | "ask" | "custom" | "table" | "chart"; selection?: { from: number; to: number } } & Pos;
+type Prompt = { kind: "write" | "ask" | "table" | "chart" } & Pos;
 
 function caretPos(editor: Editor): Pos {
   const { from } = editor.state.selection;
@@ -109,7 +109,6 @@ export function EditorAiCommands({
   const [promptValue, setPromptValue] = useState("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [bubble, setBubble] = useState<Pos | null>(null);
   const [tableBar, setTableBar] = useState<Pos | null>(null);
   const promptInput = useRef<HTMLInputElement>(null);
   const highlightedItem = useRef<HTMLButtonElement>(null);
@@ -126,14 +125,11 @@ export function EditorAiCommands({
   useEffect(() => {
     function update() {
       const { state } = editor;
-      const { from, empty } = state.selection;
+      const { empty } = state.selection;
       if (!empty) {
-        const c = editor.view.coordsAtPos(from);
-        setBubble({ top: c.top - 38, left: c.left });
         setMenu(null);
         return;
       }
-      setBubble(null);
       const $from = state.selection.$from;
       const before = $from.parent.textBetween(0, $from.parentOffset, "\n", "￼");
       const match = /(?:^|\s)\/([a-zA-Z0-9]*)$/.exec(before);
@@ -479,17 +475,6 @@ export function EditorAiCommands({
         const body = await res.json().catch(() => ({}));
         if (!res.ok) setError(body.error ?? "The assistant is unavailable.");
         else appendMarkdown(body.answer ?? "");
-      } else if (prompt.kind === "custom" && prompt.selection) {
-        const { from, to } = prompt.selection;
-        const selected = editor.state.doc.textBetween(from, to, "\n");
-        const res = await fetch("/api/ai/compose", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: "custom", prompt: value, text: selected }),
-        });
-        const body = await res.json().catch(() => ({}));
-        if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
-        else editor.chain().focus().insertContentAt({ from, to }, body.text ?? "").run();
       } else if (prompt.kind === "chart") {
         const res = await fetch("/api/ai/compose", {
           method: "POST",
@@ -540,14 +525,6 @@ export function EditorAiCommands({
     }
   }
 
-  function openSelectionPrompt() {
-    const { from, to } = editor.state.selection;
-    const pos = caretPos(editor);
-    setPromptValue("");
-    setBubble(null);
-    setPrompt({ kind: "custom", selection: { from, to }, top: pos.top, left: pos.left });
-  }
-
   const TB = "flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800 dark:hover:text-zinc-100";
   const TB_DANGER = "flex h-7 w-7 items-center justify-center rounded text-zinc-500 hover:bg-red-50 hover:text-red-600 dark:text-zinc-300 dark:hover:bg-red-500/10 dark:hover:text-red-400";
   const tableButtons: { icon: typeof Sparkles; title: string; danger?: boolean; act: () => void }[] = [
@@ -566,13 +543,11 @@ export function EditorAiCommands({
   const promptPlaceholder =
     prompt?.kind === "ask"
       ? "Ask about this project's documents…"
-      : prompt?.kind === "custom"
-        ? "How should AI change the selection?"
-        : prompt?.kind === "table"
-          ? "What should the table contain?"
-          : prompt?.kind === "chart"
-            ? "Describe the chart, e.g. monthly signups in 2026 as a line chart"
-            : "Describe what to write…";
+      : prompt?.kind === "table"
+        ? "What should the table contain?"
+        : prompt?.kind === "chart"
+          ? "Describe the chart, e.g. monthly signups in 2026 as a line chart"
+          : "Describe what to write…";
 
   const chartButtons: { icon: typeof Sparkles; title: string; type: ChartType }[] = [
     { icon: ChartColumn, title: "Bar chart from this table", type: "bar" },
@@ -613,21 +588,6 @@ export function EditorAiCommands({
             </button>
           ))}
         </div>
-      )}
-
-      {/* Selection → AI edit button */}
-      {bubble && !prompt && (
-        <button
-          type="button"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            openSelectionPrompt();
-          }}
-          style={{ top: bubble.top, left: bubble.left }}
-          className="fixed z-40 inline-flex items-center gap-1 rounded-md bg-zinc-900 px-2 py-1 text-xs font-medium text-white shadow-lg hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-        >
-          <WandSparkles size={12} /> AI edit
-        </button>
       )}
 
       {/* Slash command menu */}
@@ -687,7 +647,6 @@ export function EditorAiCommands({
               <X size={14} />
             </button>
           </div>
-          {prompt.kind === "custom" && <p className="mt-1 pl-6 text-[11px] text-zinc-400">Rewrites the selected text.</p>}
         </div>
       )}
 
