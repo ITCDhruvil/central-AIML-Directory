@@ -27,7 +27,6 @@ import { cn } from "@/lib/cn";
 import { textStats } from "@/lib/textStats";
 import { embedSource } from "@/lib/embed";
 import { insertBlock, insertEmbed, type BlockKind } from "@/components/ui/blockInsert";
-import { useClickOutside } from "@/lib/useClickOutside";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Counts
@@ -476,13 +475,28 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
 export type MoreEntry = { icon: LucideIcon; label: string; run: () => void; keep?: boolean };
 type Entry = MoreEntry;
 
-export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { title: string; items: MoreEntry[] }[] }) {
+export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { title: string; items: MoreEntry[]; node?: React.ReactNode }[] }) {
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState<string | null>(null);
   const [embed, setEmbed] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  useClickOutside(ref, () => setOpen(false), open);
+  // Closes on a click elsewhere, but not on a click inside a popover opened from the menu (the colour picker).
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      const target = e.target as Element | null;
+      if (ref.current?.contains(target) || target?.closest("[data-radix-popper-content-wrapper]")) return;
+      setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
 
   // Ctrl+/ shows the shortcuts; the slash menu asks for the embed dialog through an event.
   useEffect(() => {
@@ -506,7 +520,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
   }, [editor]);
 
   const block = (kind: BlockKind) => () => insertBlock(editor, kind);
-  const groups: { title: string; items: Entry[] }[] = [
+  const groups: { title: string; items: Entry[]; node?: React.ReactNode }[] = [
     ...extra,
     {
       title: "Add blocks",
@@ -565,6 +579,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
           {groups.map((g, gi) => (
             <div key={g.title} className={cn(gi > 0 && "mt-1 border-t border-zinc-100 pt-1 dark:border-zinc-800")}>
               <p className="px-3 pb-0.5 pt-1 text-[11px] font-medium text-zinc-400">{g.title}</p>
+              {"node" in g && g.node && <div className="flex items-center gap-1 px-2 py-1">{g.node}</div>}
               {g.items.map((item) => (
                 <button
                   key={item.label}

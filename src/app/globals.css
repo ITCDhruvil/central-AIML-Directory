@@ -739,3 +739,79 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
 .mermaid-preview svg, .mermaid-preview svg text, .mermaid-preview svg span, .mermaid-preview svg p {
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif !important;
 }
+
+/* ---- shadcn-style tokens, used by components/ui/shadcn (the colour picker) ---- */
+:root {
+  --sh-background: #ffffff;
+  --sh-foreground: #18181b;
+  --sh-popover: #ffffff;
+  --sh-popover-foreground: #18181b;
+  --sh-primary: #f97316;
+  --sh-primary-foreground: #ffffff;
+  --sh-secondary: #f4f4f5;
+  --sh-secondary-foreground: #18181b;
+  --sh-muted: #f4f4f5;
+  --sh-muted-foreground: #71717a;
+  --sh-accent: #f4f4f5;
+  --sh-accent-foreground: #18181b;
+  --sh-destructive: #ef4444;
+  --sh-destructive-foreground: #ffffff;
+  --sh-border: #e4e4e7;
+  --sh-input: #e4e4e7;
+  --sh-ring: #f97316;
+}
+.dark {
+  --sh-background: #0d0d0f;
+  --sh-foreground: #fafafa;
+  --sh-popover: #0d0d0f;
+  --sh-popover-foreground: #fafafa;
+  --sh-secondary: #1a1a1d;
+  --sh-secondary-foreground: #fafafa;
+  --sh-muted: #1a1a1d;
+  --sh-muted-foreground: #a1a1aa;
+  --sh-accent: #1a1a1d;
+  --sh-accent-foreground: #fafafa;
+  --sh-border: #2a2a2e;
+  --sh-input: #2a2a2e;
+}
+@theme inline {
+  --color-background: var(--sh-background);
+  --color-foreground: var(--sh-foreground);
+  --color-popover: var(--sh-popover);
+  --color-popover-foreground: var(--sh-popover-foreground);
+  --color-primary: var(--sh-primary);
+  --color-primary-foreground: var(--sh-primary-foreground);
+  --color-secondary: var(--sh-secondary);
+  --color-secondary-foreground: var(--sh-secondary-foreground);
+  --color-muted: var(--sh-muted);
+  --color-muted-foreground: var(--sh-muted-foreground);
+  --color-accent: var(--sh-accent);
+  --color-accent-foreground: var(--sh-accent-foreground);
+  --color-destructive: var(--sh-destructive);
+  --color-destructive-foreground: var(--sh-destructive-foreground);
+  --color-border: var(--sh-border);
+  --color-input: var(--sh-input);
+  --color-ring: var(--sh-ring);
+}
+
+/* ---- Text colour and highlight: one stored colour, drawn to suit the theme ---- */
+.tc { color: var(--c); }
+.hl {
+  background: var(--c);
+  border-radius: 0.2em;
+  padding: 0 0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+@supports (color: oklch(from red l c h)) {
+  /* Text: dark enough on a light page, light enough on a dark one. */
+  .tc { color: oklch(from var(--c) clamp(0.3, l, 0.55) c h); }
+  .dark .tc { color: oklch(from var(--c) clamp(0.74, l, 0.93) c h); }
+  /* Highlight: deeper in light mode, lighter in dark mode, with black or white text chosen to stay readable. */
+  .hl {
+    --hl-bg: oklch(from var(--c) clamp(0.38, l, 0.6) c h);
+    background: var(--hl-bg);
+    color: oklch(from var(--hl-bg) calc((0.64 - l) * 1000) 0 0);
+  }
+  .dark .hl { --hl-bg: oklch(from var(--c) clamp(0.78, l, 0.92) c h); }
+}

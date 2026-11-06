@@ -10,6 +10,7 @@ import { headingId, markdownHeadings, parseAlertMarker, TOC_MARKER, type Callout
 import { embedSource, EMBED_ALT } from "@/lib/embed";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { remarkHtmlWrappers } from "@/lib/remarkHtmlWrappers";
 
 const BASE_CLASS_LIST = [
   "text-sm leading-relaxed text-zinc-700 dark:text-zinc-300",
@@ -198,7 +199,7 @@ export function MarkdownView({
   if (variant === "chat") {
     return (
       <div className={`${CHAT_BASE} ${CHAT_TABLE_CLASSES}`}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={chatComponents(content)}>
+        <ReactMarkdown remarkPlugins={[remarkGfm, remarkHtmlWrappers]} components={chatComponents(content)}>
           {content}
         </ReactMarkdown>
       </div>
@@ -206,7 +207,7 @@ export function MarkdownView({
   }
   return (
     <div className={WRAPPER_CLASSES}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={pageComponents(content)}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkHtmlWrappers]} components={pageComponents(content)}>
         {content}
       </ReactMarkdown>
     </div>

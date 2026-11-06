@@ -48,6 +48,10 @@ import {
   RemoveFormatting,
   Smile,
   Sparkles,
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
   ListIndentIncrease,
   ListIndentDecrease,
   Search,
@@ -70,6 +74,8 @@ import { ChartPreview } from "@/components/ui/ChartPreview";
 import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
+import { ColorTools } from "@/components/ui/ColorTools";
+import { AlignedHeading, AlignedParagraph, Highlight, TextColor, ALIGNMENTS, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
 import { FindReplace } from "@/components/ui/FindReplace";
 import { MentionMenu } from "@/components/ui/MentionMenu";
@@ -222,10 +228,10 @@ function SplitToolbarGroup({
     <div ref={ref} className="relative">
       <div
         className={cn(
-          "flex items-stretch overflow-hidden rounded transition-colors",
+          "flex items-stretch overflow-hidden rounded border transition-colors",
           highlighted
-            ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
-            : "text-zinc-500 hover:bg-zinc-200/80 dark:text-zinc-400 dark:hover:bg-zinc-800",
+            ? "border-orange-200 bg-orange-100 text-orange-700 dark:border-orange-500/30 dark:bg-orange-500/20 dark:text-orange-400"
+            : "border-zinc-200 text-zinc-500 hover:bg-zinc-200/80 dark:border-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800",
         )}
       >
         <button
@@ -453,6 +459,44 @@ const HEADING_LABEL_CLASS: Record<(typeof HEADING_LEVELS)[number], string> = {
   5: "text-xs font-semibold leading-tight",
   6: "text-xs font-medium leading-tight",
 };
+
+const ALIGN_META: Record<Alignment, { label: string; icon: LucideIcon }> = {
+  left: { label: "Align left", icon: AlignLeft },
+  center: { label: "Align center", icon: AlignCenter },
+  right: { label: "Align right", icon: AlignRight },
+  justify: { label: "Justify", icon: AlignJustify },
+};
+
+function currentAlignment(editor: Editor): Alignment {
+  const value = (editor.getAttributes("heading").textAlign ?? editor.getAttributes("paragraph").textAlign) as string | undefined;
+  return (ALIGNMENTS as readonly string[]).includes(value ?? "") ? (value as Alignment) : "left";
+}
+
+function setAlignment(editor: Editor, align: Alignment) {
+  editor.chain().focus().updateAttributes("paragraph", { textAlign: align }).updateAttributes("heading", { textAlign: align }).run();
+}
+
+function AlignMenu({ editor }: { editor: Editor }) {
+  const [open, setOpen] = useState(false);
+  const current = currentAlignment(editor);
+  const Icon = ALIGN_META[current].icon;
+  return (
+    <SplitToolbarGroup label="Alignment" icon={Icon} active={current !== "left"} open={open} onOpenChange={setOpen}>
+      {ALIGNMENTS.map((a) => (
+        <MenuItemWithShortcut
+          key={a}
+          icon={ALIGN_META[a].icon}
+          label={ALIGN_META[a].label}
+          active={current === a}
+          onClick={() => {
+            setAlignment(editor, a);
+            setOpen(false);
+          }}
+        />
+      ))}
+    </SplitToolbarGroup>
+  );
+}
 
 function HeadingsMenu({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
@@ -723,11 +767,11 @@ function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | n
   );
 }
 
-type ToolGroup = "autocomplete" | "lists" | "headings" | "blocks" | "table" | "image" | "link" | "edit" | "history";
+type ToolGroup = "autocomplete" | "lists" | "headings" | "align" | "color" | "blocks" | "table" | "image" | "link" | "edit" | "history";
 
 // The order groups stay on the toolbar as it narrows: the toolbar is filled as far as it will go, and whatever is left
 // moves into the "..." menu instead of wrapping onto a second row.
-const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "autocomplete", "link", "image", "table", "blocks", "edit", "history"];
+const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "align", "color", "autocomplete", "link", "image", "table", "blocks", "edit", "history"];
 // Groups that have a divider in front of them when shown.
 const DIVIDED: ToolGroup[] = ["blocks", "edit", "history"];
 
@@ -815,6 +859,9 @@ function Toolbar({
       { icon: ListChecks, label: "To-do list", run: () => chain().toggleTaskList().run() },
     );
   }
+  if (!shown.has("align")) {
+    ALIGNMENTS.forEach((a) => text.push({ icon: ALIGN_META[a].icon, label: ALIGN_META[a].label, keep: true, run: () => setAlignment(editor, a) }));
+  }
   if (!shown.has("headings")) {
     text.push(
       { icon: Pilcrow, label: "Normal text", run: () => chain().setParagraph().run() },
@@ -850,10 +897,11 @@ function Toolbar({
     );
   }
   const extra = [
+    ...(!shown.has("color") ? [{ title: "Colors", items: [] as MoreEntry[], node: <ColorTools editor={editor} /> }] : []),
     { title: "Text", items: text },
     { title: "Insert", items: insert },
     { title: "Edit", items: edit },
-  ].filter((g) => g.items.length > 0);
+  ].filter((g) => g.items.length > 0 || g.node);
 
   // The optional groups, used both on the toolbar and in the hidden copy that is measured.
   const groupNodes: Record<ToolGroup, React.ReactNode> = {
@@ -877,6 +925,8 @@ function Toolbar({
     ),
     lists: <ListsMenu editor={editor} />,
     headings: <HeadingsMenu editor={editor} />,
+    align: <AlignMenu editor={editor} />,
+    color: <ColorTools editor={editor} />,
     blocks: (
       <>
         <ToolbarButton label="Quote" icon={Quote} active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
@@ -925,6 +975,8 @@ function Toolbar({
       </div>
       {show("lists")}
       {show("headings")}
+      {show("align")}
+      {show("color")}
 
       {show("blocks", true)}
       {show("table")}
@@ -1032,7 +1084,12 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       // StarterKit v3 bundles link and underline; they are registered separately below with our options.
-      StarterKit.configure({ heading: { levels: [1, 2, 3, 4, 5, 6] }, link: false, underline: false }),
+      StarterKit.configure({ paragraph: false, heading: false, link: false, underline: false }),
+      // Paragraphs and headings that remember their alignment, plus text colour and highlight (see ColorMarks.ts).
+      AlignedParagraph,
+      AlignedHeading.configure({ levels: [1, 2, 3, 4, 5, 6] }),
+      TextColor,
+      Highlight,
       Table.configure({ resizable: true }),
       TableRow,
       TableHeader,
@@ -1059,7 +1116,7 @@ export function RichTextEditor({
               ? placeholder
               : EDITOR_HINT,
       }),
-      Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true }),
+      Markdown.configure({ html: true, transformCopiedText: true, transformPastedText: true }),
     ],
     content: value,
     immediatelyRender: false,
