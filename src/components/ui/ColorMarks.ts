@@ -2,7 +2,7 @@ import { Extension, Mark } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
 import Heading from "@tiptap/extension-heading";
 import { parseFontSize } from "@/lib/fontSize";
-import { MAX_INDENT, isAlignment, isLineHeight, openTag, type Alignment, type BlockFormat } from "@/lib/blockFormat";
+import { MAX_INDENT, blockStyle, isAlignment, isVariant, isLineHeight, openTag, type Alignment, type BlockFormat } from "@/lib/blockFormat";
 
 export { ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, type Alignment } from "@/lib/blockFormat";
 
@@ -92,7 +92,7 @@ type SerializerState = {
   closeBlock: (node: unknown) => void;
   repeat: (s: string, n: number) => string;
 };
-type AlignedNode = { attrs: { textAlign?: string; lineHeight?: string | null; indent?: number | null; dir?: string | null; level?: number } };
+type AlignedNode = { attrs: { variant?: string | null; textAlign?: string; lineHeight?: string | null; indent?: number | null; dir?: string | null; level?: number } };
 
 /** The wrapper tag a block needs (null for the default look). */
 function blockTag(attrs: AlignedNode["attrs"]): string | null {
@@ -101,6 +101,7 @@ function blockTag(attrs: AlignedNode["attrs"]): string | null {
   if (attrs.dir === "rtl") format.dir = "rtl";
   if (isLineHeight(attrs.lineHeight)) format.lineHeight = attrs.lineHeight;
   if (attrs.indent && attrs.indent > 0) format.indent = Math.min(MAX_INDENT, Math.round(attrs.indent));
+  if (isVariant(attrs.variant)) format.variant = attrs.variant;
   return openTag(format);
 }
 
@@ -145,6 +146,14 @@ const alignAttribute = {
       return Number.isInteger(n) && n >= 1 && n <= MAX_INDENT ? n : 0;
     },
     renderHTML: (attrs: { indent?: number }) => (attrs.indent && attrs.indent > 0 ? { style: `margin-inline-start:${attrs.indent * 2}rem` } : {}),
+  },
+  variant: {
+    default: null,
+    parseHTML: (el: HTMLElement) => {
+      const v = wrapperAttr(el, "data-pv");
+      return isVariant(v) ? v : null;
+    },
+    renderHTML: (attrs: { variant?: string | null }) => (isVariant(attrs.variant) ? { style: blockStyle({ variant: attrs.variant }) } : {}),
   },
   dir: {
     default: null,
@@ -200,7 +209,7 @@ export const AlignShortcuts = Extension.create({
 });
 
 /** Sets paragraph formatting (alignment, spacing, indent, direction) on the paragraphs and headings in the selection. */
-export function setBlockFormat(editor: import("@tiptap/core").Editor, attrs: Partial<{ textAlign: Alignment; lineHeight: string | null; indent: number; dir: "rtl" | null }>) {
+export function setBlockFormat(editor: import("@tiptap/core").Editor, attrs: Partial<{ textAlign: Alignment; lineHeight: string | null; indent: number; dir: "rtl" | null; variant: "title" | "subtitle" | null }>) {
   editor.chain().focus().updateAttributes("paragraph", attrs).updateAttributes("heading", attrs).run();
 }
 
@@ -212,5 +221,6 @@ export function blockFormatAt(editor: import("@tiptap/core").Editor) {
     lineHeight: isLineHeight(a.lineHeight) ? a.lineHeight : null,
     indent: typeof a.indent === "number" ? a.indent : 0,
     dir: a.dir === "rtl" ? ("rtl" as const) : null,
+    variant: isVariant(a.variant) ? a.variant : null,
   };
 }

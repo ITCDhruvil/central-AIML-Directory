@@ -5,7 +5,7 @@
 // wrappers, with exactly these attribute values, and turns them into styled nodes; any other HTML is left as it was
 // (and so still not shown). Pure (no DOM) so it can be tested.
 
-import { blockStyle, parseOpenTag } from "@/lib/blockFormat";
+import { PAGE_BREAK_HTML, blockStyle, parseListTag, parseOpenTag } from "@/lib/blockFormat";
 import { parseFontSize } from "@/lib/fontSize";
 
 type MdNode = {
@@ -32,6 +32,8 @@ function openOf(node: MdNode): Opened | null {
   const size = SIZE_OPEN.exec(value);
   const px = size ? parseFontSize(size[1]) : null;
   if (px) return { tag: "span", props: { className: ["ts"], style: `font-size:${px}px`, "data-wrapper": "s" } };
+  const listType = parseListTag(value);
+  if (listType) return { tag: "div", props: { className: ["lt", `lt-${listType}`] } };
   const block = parseOpenTag(value);
   if (block) {
     const props: Record<string, unknown> = { style: blockStyle(block) };
@@ -46,6 +48,10 @@ const isClose = (node: MdNode, tag: "span" | "div") => node.type === "html" && n
 function wrap(children: MdNode[]): MdNode[] {
   const out: MdNode[] = [];
   for (let i = 0; i < children.length; i += 1) {
+    if (children[i].type === "html" && children[i].value?.trim() === PAGE_BREAK_HTML) {
+      out.push({ type: "pageBreak", data: { hName: "div", hProperties: { className: ["page-break"] } }, children: [] });
+      continue;
+    }
     const open = openOf(children[i]);
     if (!open) {
       out.push(children[i]);

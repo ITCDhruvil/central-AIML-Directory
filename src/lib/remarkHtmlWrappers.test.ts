@@ -41,3 +41,10 @@ test("leaves anything else alone: other html, bad colours, unmatched tags", () =
   assert.equal(normalizeHex("url(x)"), null);
   assert.equal(normalizeHex("#fff"), null);
 });
+
+test("wraps styled lists and turns the page break marker into a node", () => {
+  const list = wrapHtmlSiblings([html('<div data-lt="alpha">'), { type: "list", children: [] }, html("</div>")]);
+  assert.deepEqual(list[0].data?.hProperties, { className: ["lt", "lt-alpha"] });
+  const pb = wrapHtmlSiblings([text("a"), html('<div data-pb="1"></div>'), text("b")]);
+  assert.equal(pb[1].type, "pageBreak");
+});

@@ -518,9 +518,53 @@ model DayNote {
   day        String
   content    String   @default("")
   authorName String?
+  pinned     Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   @@unique([scopeType, scopeId, day])
   @@index([scopeType, scopeId, day])
+}
+
+// Extra pages for a day or a week of notes, so one day can hold several short notes. `key` is the day ("YYYY-MM-DD")
+// or the week ("week:YYYY-MM-DD", the Monday). Same loose scope as DayNote.
+model DayNotePage {
+  id         String   @id @default(cuid())
+  scopeType  String
+  scopeId    String
+  key        String
+  title      String   @default("")
+  content    String   @default("")
+  position   Int      @default(0)
+  pinned     Boolean  @default(false)
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([scopeType, scopeId, key])
+}
+
+// Earlier copies of a day note or page, kept so a bad edit or AI rewrite can be undone. `noteKey` is the day, or
+// "page:<id>" for a page.
+model NoteVersion {
+  id         String   @id @default(cuid())
+  scopeType  String
+  scopeId    String
+  noteKey    String
+  content    String
+  authorName String?
+  createdAt  DateTime @default(now())
+
+  @@index([scopeType, scopeId, noteKey, createdAt])
+}
+
+// A person's own saved note templates (the built-in ones live in the editor).
+model NoteTemplate {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }

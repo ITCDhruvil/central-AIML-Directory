@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  FilePlus2,
+  Footprints,
   Calendar,
   Clock,
   Smile,
@@ -39,7 +41,7 @@ import {
 import { createNodeFromContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
-import { insertBlock, type BlockKind } from "@/components/ui/blockInsert";
+import { BUILT_IN_TEMPLATES, insertBlock, insertFootnote, insertPageBreak, type BlockKind } from "@/components/ui/blockInsert";
 import { formatDate, formatTime } from "@/components/ui/EditorExtras";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
@@ -63,6 +65,9 @@ const BASE_COMMANDS: Command[] = [
   { id: "grid-4x4", label: "Table 4 \u00d7 4", hint: "4 columns \u00d7 4 rows", icon: Table2, run: "grid:4:4" },
   { id: "grid-5x3", label: "Table 5 \u00d7 3", hint: "5 columns \u00d7 3 rows", icon: Table2, run: "grid:5:3" },
   { id: "grid-6x4", label: "Table 6 \u00d7 4", hint: "6 columns \u00d7 4 rows", icon: Table2, run: "grid:6:4" },
+  { id: "templates", label: "Templates", hint: "Insert or save a note template", icon: FilePlus2, run: "templates" },
+  { id: "page-break", label: "Page break", hint: "Start a new page when printing", icon: Scissors, run: "page-break" },
+  { id: "footnote", label: "Footnote", hint: "Add a numbered footnote", icon: Footprints, run: "footnote" },
   { id: "date", label: "Today's date", hint: "Insert the current date", icon: Calendar, run: "text:date" },
   { id: "time", label: "Current time", hint: "Insert the time now", icon: Clock, run: "text:time" },
   { id: "symbols", label: "Emoji and symbols", hint: "Pick a symbol, arrow or emoji", icon: Smile, run: "symbols" },
@@ -95,12 +100,7 @@ const BASE_COMMANDS: Command[] = [
   { id: "tmpl-prd", label: "Template: PRD", hint: "Insert a product-requirements skeleton", icon: Target, run: "tmpl:prd" },
 ];
 
-const TEMPLATES: Record<string, string> = {
-  meeting: "## Meeting notes\n\n**Date:** \n**Attendees:** \n\n### Agenda\n- \n\n### Discussion\n- \n\n### Decisions\n- \n\n### Action items\n- [ ] ",
-  standup: "## Standup\n\n**Yesterday**\n- \n\n**Today**\n- \n\n**Blockers**\n- ",
-  decision: "## Decision\n\n**Context**\n\n**Options considered**\n- \n\n**Decision**\n\n**Why**\n\n**Owner / date:** ",
-  prd: "# PRD\n\n## Problem\n\n## Goals\n- \n\n## Non-goals\n- \n\n## Requirements\n- \n\n## Success metrics\n- \n\n## Open questions\n- ",
-};
+const TEMPLATES: Record<string, string> = Object.fromEntries(BUILT_IN_TEMPLATES.map((t) => [t.id, t.content]));
 
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
@@ -593,6 +593,12 @@ export function EditorAiCommands({
       setPrompt({ kind: "chart", ...pos });
     } else if (cmd.run === "text:date" || cmd.run === "text:time") {
       editor.chain().focus().insertContent(cmd.run === "text:date" ? formatDate() : formatTime()).run();
+    } else if (cmd.run === "templates") {
+      editor.view.dom.dispatchEvent(new CustomEvent("open-templates"));
+    } else if (cmd.run === "page-break") {
+      insertPageBreak(editor);
+    } else if (cmd.run === "footnote") {
+      insertFootnote(editor);
     } else if (cmd.run === "symbols") {
       editor.view.dom.dispatchEvent(new CustomEvent("open-symbols"));
     } else if (cmd.run.startsWith("block:")) {

@@ -8,6 +8,9 @@ import {
   Calendar,
   Clock,
   Smile,
+  FilePlus2,
+  Scissors,
+  Footprints,
   AtSign,
   ClipboardCopy,
   Ellipsis,
@@ -29,7 +32,7 @@ import type { Node as PMNode } from "@tiptap/pm/model";
 import { cn } from "@/lib/cn";
 import { textStats } from "@/lib/textStats";
 import { embedSource } from "@/lib/embed";
-import { insertBlock, insertEmbed, type BlockKind } from "@/components/ui/blockInsert";
+import { BUILT_IN_TEMPLATES, insertBlock, insertEmbed, insertFootnote, insertMarkdown, insertPageBreak, type BlockKind } from "@/components/ui/blockInsert";
 
 // ---------------------------------------------------------------------------------------------------------------
 // Counts
@@ -522,6 +525,115 @@ export const formatDate = () => new Date().toLocaleDateString(undefined, { day: 
 export const formatTime = () => new Date().toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 
 // ---------------------------------------------------------------------------------------------------------------
+// Templates
+// ---------------------------------------------------------------------------------------------------------------
+
+type SavedTemplate = { id: string; name: string; content: string };
+
+/** Insert a built-in or saved template, or save the current note as a template. */
+export function TemplatesDialog({ editor, onClose }: { editor: Editor; onClose: () => void }) {
+  const [saved, setSaved] = useState<SavedTemplate[] | null>(null);
+  const [name, setName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetch("/api/me/note-templates")
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((b) => live && setSaved(b.templates ?? []))
+      .catch(() => live && setSaved([]));
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  function use(content: string) {
+    insertMarkdown(editor, content);
+    onClose();
+  }
+
+  async function saveCurrent() {
+    const content = markdownOf(editor);
+    if (!name.trim()) return setError("Give the template a name.");
+    if (!content.trim()) return setError("Write something first, then save it as a template.");
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/me/note-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, content }) });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) return setError(body.error ?? "Could not save the template.");
+      setSaved((prev) => [body.template, ...(prev ?? [])]);
+      setName("");
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(id: string) {
+    const res = await fetch(`/api/me/note-templates/${id}`, { method: "DELETE" });
+    if (res.ok) setSaved((prev) => (prev ?? []).filter((t) => t.id !== id));
+  }
+
+  const row = "flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800";
+  return (
+    <Modal title="Templates" onClose={onClose}>
+      <div className="space-y-4">
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">Your templates</p>
+          {saved === null ? (
+            <p className="px-3 py-2 text-sm text-zinc-400">Loading…</p>
+          ) : saved.length === 0 ? (
+            <p className="px-3 py-2 text-sm text-zinc-400">You haven&apos;t saved any yet. Save this note below to reuse it.</p>
+          ) : (
+            saved.map((t) => (
+              <div key={t.id} className={row}>
+                <button type="button" onClick={() => use(t.content)} className="min-w-0 flex-1 truncate text-left text-zinc-800 dark:text-zinc-100">
+                  {t.name}
+                </button>
+                <button type="button" onClick={() => void remove(t.id)} aria-label={`Delete ${t.name}`} title="Delete" className="rounded p-1 text-zinc-400 hover:text-red-500">
+                  <X size={14} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">Built in</p>
+          {BUILT_IN_TEMPLATES.map((t) => (
+            <button key={t.id} type="button" onClick={() => use(t.content)} className={cn(row, "w-full text-zinc-800 dark:text-zinc-100")}>
+              {t.name}
+            </button>
+          ))}
+        </div>
+        <div className="border-t border-zinc-100 pt-3 dark:border-zinc-800">
+          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-zinc-400">Save this note as a template</p>
+          <div className="flex gap-2">
+            <input
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                setError(null);
+              }}
+              onKeyDown={(e) => e.key === "Enter" && void saveCurrent()}
+              maxLength={60}
+              placeholder="Template name"
+              className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm text-zinc-900 outline-none placeholder:text-zinc-400 focus:border-orange-400 dark:border-zinc-700 dark:text-zinc-100 dark:placeholder:text-zinc-500"
+            />
+            <button type="button" disabled={busy} onClick={() => void saveCurrent()} className="rounded-lg bg-orange-500 px-4 text-sm font-medium text-white hover:bg-orange-600 disabled:opacity-50">
+              Save
+            </button>
+          </div>
+          {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ---------------------------------------------------------------------------------------------------------------
 // "More" menu: extra blocks, export, help
 // ---------------------------------------------------------------------------------------------------------------
 
@@ -534,6 +646,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
   const [embed, setEmbed] = useState(false);
   const [shortcuts, setShortcuts] = useState(false);
   const [symbols, setSymbols] = useState(false);
+  const [templates, setTemplates] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   // Closes on a click elsewhere, but not on a click inside a popover opened from the menu (the colour picker).
   useEffect(() => {
@@ -564,15 +677,18 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
     const onEmbed = () => setEmbed(true);
     const onShortcuts = () => setShortcuts(true);
     const onSymbols = () => setSymbols(true);
+    const onTemplates = () => setTemplates(true);
     dom.addEventListener("keydown", onKey);
     dom.addEventListener("open-embed", onEmbed);
     dom.addEventListener("open-shortcuts", onShortcuts);
     dom.addEventListener("open-symbols", onSymbols);
+    dom.addEventListener("open-templates", onTemplates);
     return () => {
       dom.removeEventListener("keydown", onKey);
       dom.removeEventListener("open-embed", onEmbed);
       dom.removeEventListener("open-shortcuts", onShortcuts);
       dom.removeEventListener("open-symbols", onSymbols);
+      dom.removeEventListener("open-templates", onTemplates);
     };
   }, [editor]);
 
@@ -591,6 +707,9 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
         { icon: Play, label: "Embed video or design", run: () => setEmbed(true) },
         { icon: Workflow, label: "Diagram with AI", run: () => editor.view.dom.dispatchEvent(new CustomEvent("open-ai-prompt", { detail: { kind: "diagram" } })) },
         { icon: Workflow, label: "Diagram (write code)", run: block("mermaid") },
+        { icon: FilePlus2, label: "Templates", run: () => setTemplates(true) },
+        { icon: Scissors, label: "Page break", run: () => insertPageBreak(editor) },
+        { icon: Footprints, label: "Footnote", run: () => insertFootnote(editor) },
         { icon: Smile, label: "Emoji and symbols", run: () => setSymbols(true) },
         { icon: Calendar, label: "Insert today's date", run: () => editor.chain().focus().insertContent(formatDate()).run() },
         { icon: Clock, label: "Insert the time", run: () => editor.chain().focus().insertContent(formatTime()).run() },
@@ -663,6 +782,7 @@ export function MoreMenu({ editor, extra = [] }: { editor: Editor; extra?: { tit
       {embed && <EmbedDialog editor={editor} onClose={() => setEmbed(false)} />}
       {shortcuts && <ShortcutsDialog onClose={() => setShortcuts(false)} />}
       {symbols && <SymbolDialog editor={editor} onClose={() => setSymbols(false)} />}
+      {templates && <TemplatesDialog editor={editor} onClose={() => setTemplates(false)} />}
     </div>
   );
 }

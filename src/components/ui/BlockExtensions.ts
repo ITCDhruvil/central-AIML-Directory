@@ -1,6 +1,7 @@
 import { Extension, mergeAttributes, Node } from "@tiptap/core";
 import { Plugin, TextSelection } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import { PAGE_BREAK_HTML } from "@/lib/blockFormat";
 import { alertMarkerLine, parseAlertMarker, TOC_MARKER, type AlertMarker, type CalloutType } from "@/lib/alerts";
 import { embedSource, EMBED_ALT } from "@/lib/embed";
 import { renderMermaid } from "@/lib/mermaidClient";
@@ -368,4 +369,61 @@ const MermaidPreview = Extension.create({
   },
 });
 
-export const BlockExtensions = [Callout, Toggle, Embed, TocPreview, MermaidPreview];
+/** A page break: invisible in Markdown views, a dashed line in the editor, and a real break when printed or exported. */
+export const PageBreak = Node.create({
+  name: "pageBreak",
+  group: "block",
+  atom: true,
+  selectable: true,
+  draggable: true,
+
+  parseHTML() {
+    return [{ tag: "div[data-pb]" }];
+  },
+
+  renderHTML() {
+    return ["div", { class: "page-break", "data-pb": "1", contenteditable: "false" }];
+  },
+
+  addStorage() {
+    return {
+      markdown: {
+        serialize(state: SerializerState, node: unknown) {
+          state.write(PAGE_BREAK_HTML);
+          state.closeBlock(node);
+        },
+        parse: {},
+      },
+    };
+  },
+});
+
+/** Footnote markers ([^1]) and their definitions ([^1]: text) are plain Markdown; this only styles them in the editor. */
+const FootnoteStyle = Extension.create({
+  name: "footnoteStyle",
+
+  addProseMirrorPlugins() {
+    return [
+      new Plugin({
+        props: {
+          decorations(state) {
+            const decorations: Decoration[] = [];
+            state.doc.descendants((node, pos) => {
+              if (node.type.name === "paragraph" && /^\[\^\d+\]:/.test(node.textContent)) {
+                decorations.push(Decoration.node(pos, pos + node.nodeSize, { class: "fn-definition" }));
+              }
+              if (!node.isText || !node.text) return;
+              for (const m of node.text.matchAll(/\[\^\d+\]/g)) {
+                const from = pos + (m.index ?? 0);
+                decorations.push(Decoration.inline(from, from + m[0].length, { class: "fn-ref" }));
+              }
+            });
+            return DecorationSet.create(state.doc, decorations);
+          },
+        },
+      }),
+    ];
+  },
+});
+
+export const BlockExtensions = [Callout, Toggle, Embed, TocPreview, MermaidPreview, PageBreak, FootnoteStyle];

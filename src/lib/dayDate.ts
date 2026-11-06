@@ -36,6 +36,21 @@ export function shiftMonth(month: string, delta: number): string {
   return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}`;
 }
 
+/** The Monday of the week that contains `day`. */
+export function weekStart(day: string): string {
+  const [y, m, d] = day.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay(); // 0 = Sunday
+  return addDays(day, -((dow + 6) % 7));
+}
+
+/** The key that groups a week's pages: "week:<Monday>". */
+export const weekKey = (day: string) => `week:${weekStart(day)}`;
+
+/** True for a day ("YYYY-MM-DD") or a week key ("week:YYYY-MM-DD"). */
+export function isValidPageKey(key: string): boolean {
+  return isValidDay(key) || (key.startsWith("week:") && isValidDay(key.slice(5)));
+}
+
 /** The 7-day window ending on `endDay` (inclusive): { from, to }. */
 export function weekEnding(endDay: string, length = 7): { from: string; to: string } {
   return { from: addDays(endDay, -(length - 1)), to: endDay };

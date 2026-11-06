@@ -826,3 +826,36 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
 
 /* Font sizes are set inline (font-size in px) on .ts spans. */
 .ts { line-height: 1.3; }
+
+/* ---- List styles (inside <div data-lt>, rendered in Markdown views) ---- */
+.lt-alpha ol { list-style-type: lower-alpha; }
+.lt-ALPHA ol { list-style-type: upper-alpha; }
+.lt-roman ol { list-style-type: lower-roman; }
+.lt-ROMAN ol { list-style-type: upper-roman; }
+.lt-square ul { list-style-type: square; }
+.lt-circle ul { list-style-type: circle; }
+
+/* ---- Page breaks and footnotes ---- */
+.page-break { margin: 1.25rem 0; border-top: 2px dashed rgb(161 161 170 / 0.6); position: relative; height: 0; break-after: page; page-break-after: always; }
+.ProseMirror .page-break::after {
+  content: "Page break";
+  position: absolute;
+  top: -0.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 0.6rem;
+  font-size: 0.65rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(161 161 170);
+  background: var(--color-white, #fff);
+}
+.dark .ProseMirror .page-break::after { background: #0d0d0f; }
+.ProseMirror .page-break.ProseMirror-selectednode { border-top-color: #f97316; }
+@media print {
+  .ProseMirror .page-break::after { display: none; }
+  .page-break { border: 0; margin: 0; }
+}
+.fn-ref { font-size: 0.75em; vertical-align: super; color: #f97316; }
+.fn-definition { font-size: 0.8rem; color: rgb(113 113 122); border-top: 1px solid rgb(228 228 231); padding-top: 0.25rem; }
+.dark .fn-definition { border-top-color: rgb(63 63 70 / 0.7); }

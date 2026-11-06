@@ -77,6 +77,8 @@ import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
 import { ColorTools } from "@/components/ui/ColorTools";
+import { StyledBulletList, StyledOrderedList } from "@/components/ui/ListStyles";
+import { type ListType } from "@/lib/blockFormat";
 import { FontSizeControl, currentFontSize, stepFontSize } from "@/components/ui/FontSize";
 import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, TextSize, ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, blockFormatAt, setBlockFormat, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
@@ -405,6 +407,13 @@ function FormatTextMenu({ editor }: { editor: Editor }) {
   );
 }
 
+const LIST_STYLE_LABEL: Record<ListType, string> = { alpha: "a. b. c.", ALPHA: "A. B. C.", roman: "i. ii. iii.", ROMAN: "I. II. III.", square: "Square bullets", circle: "Circle bullets" };
+
+function setListStyle(editor: Editor, type: ListType | null) {
+  const name = editor.isActive("orderedList") ? "orderedList" : "bulletList";
+  editor.chain().focus().updateAttributes(name, { listType: type }).run();
+}
+
 function ListsMenu({ editor }: { editor: Editor }) {
   const [open, setOpen] = useState(false);
   const listActive = editor.isActive("bulletList") || editor.isActive("orderedList") || editor.isActive("taskList");
@@ -437,7 +446,16 @@ function ListsMenu({ editor }: { editor: Editor }) {
         active={editor.isActive("taskList")}
         onClick={() => run(() => editor.chain().focus().toggleTaskList().run())}
       />
-          {editor.isActive("orderedList") && (
+          {(editor.isActive("orderedList") || editor.isActive("bulletList")) && (
+        <>
+          <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
+          {(editor.isActive("orderedList") ? (["alpha", "ALPHA", "roman", "ROMAN"] as ListType[]) : (["square", "circle"] as ListType[])).concat([]).map((t) => (
+            <MenuItemWithShortcut key={t} icon={editor.isActive("orderedList") ? ListOrdered : List} label={LIST_STYLE_LABEL[t]} active={editor.getAttributes(editor.isActive("orderedList") ? "orderedList" : "bulletList").listType === t} onClick={() => run(() => setListStyle(editor, t))} />
+          ))}
+          <MenuItemWithShortcut icon={editor.isActive("orderedList") ? ListOrdered : List} label="Default style" active={!editor.getAttributes(editor.isActive("orderedList") ? "orderedList" : "bulletList").listType} onClick={() => run(() => setListStyle(editor, null))} />
+        </>
+      )}
+      {editor.isActive("orderedList") && (
         <MenuItemWithShortcut
           icon={ListOrdered}
           label="Start numbering at…"
@@ -550,8 +568,10 @@ function HeadingsMenu({ editor }: { editor: Editor }) {
         icon={Pilcrow}
         label="Paragraph"
         active={!activeLevel && editor.isActive("paragraph") && !editor.isActive("listItem")}
-        onClick={() => run(() => editor.chain().focus().setParagraph().run())}
+        onClick={() => run(() => { editor.chain().focus().setParagraph().run(); setBlockFormat(editor, { variant: null }); })}
       />
+      <MenuItemWithShortcut icon={Heading} label="Title" labelClassName="text-lg font-bold" active={blockFormatAt(editor).variant === "title"} onClick={() => run(() => setBlockFormat(editor, { variant: "title" }))} />
+      <MenuItemWithShortcut icon={Heading} label="Subtitle" labelClassName="text-base opacity-70" active={blockFormatAt(editor).variant === "subtitle"} onClick={() => run(() => setBlockFormat(editor, { variant: "subtitle" }))} />
       {HEADING_LEVELS.map((level) => (
         <MenuItemWithShortcut
           key={level}
@@ -1197,7 +1217,10 @@ export function RichTextEditor({
   const editor = useEditor({
     extensions: [
       // StarterKit v3 bundles link and underline; they are registered separately below with our options.
-      StarterKit.configure({ paragraph: false, heading: false, link: false, underline: false }),
+      StarterKit.configure({ paragraph: false, heading: false, bulletList: false, orderedList: false, link: false, underline: false }),
+      // Lists with letter, roman or square styles (see ListStyles.ts).
+      StyledBulletList,
+      StyledOrderedList,
       // Paragraphs and headings that remember their alignment, plus text colour and highlight (see ColorMarks.ts).
       AlignedParagraph,
       AlignedHeading.configure({ levels: [1, 2, 3, 4, 5, 6] }),

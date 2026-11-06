@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addDays, dayLabel, isValidDay, isValidMonth, monthCells, monthLabel, shiftMonth, todayDay, weekEnding } from "@/lib/dayDate";
+import { addDays, dayLabel, isValidDay, isValidMonth, monthCells, monthLabel, shiftMonth, todayDay, weekEnding, weekStart, weekKey, isValidPageKey } from "@/lib/dayDate";
 
 test("validates days and months", () => {
   assert.ok(isValidDay("2026-11-05"));
@@ -35,4 +35,15 @@ test("month grid is 42 cells starting on a Sunday and marks the month", () => {
 test("labels are fixed-format", () => {
   assert.equal(monthLabel("2026-11"), "November 2026");
   assert.equal(dayLabel("2026-11-05"), "Thursday, 5 November 2026");
+});
+
+test("weekStart finds the Monday and weekKey/isValidPageKey group a week's pages", () => {
+  assert.equal(weekStart("2026-11-06"), "2026-11-02"); // a Friday
+  assert.equal(weekStart("2026-11-02"), "2026-11-02"); // the Monday itself
+  assert.equal(weekStart("2026-11-08"), "2026-11-02"); // the Sunday belongs to the week before it
+  assert.equal(weekKey("2026-11-06"), "week:2026-11-02");
+  assert.equal(isValidPageKey("2026-11-06"), true);
+  assert.equal(isValidPageKey("week:2026-11-02"), true);
+  assert.equal(isValidPageKey("week:2026-13-40"), false);
+  assert.equal(isValidPageKey("page:abc"), false);
 });

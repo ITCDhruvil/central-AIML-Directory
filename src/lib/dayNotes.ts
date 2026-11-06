@@ -1,5 +1,6 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
+import { snapshotBeforeSave } from "@/lib/noteExtras";
 
 export const MAX_DAY_NOTE_LENGTH = 100_000;
 
@@ -27,6 +28,9 @@ export async function getDayNote(scope: DayNoteScope, day: string): Promise<DayN
 
 export async function saveDayNote(scope: DayNoteScope, day: string, content: string, actorName: string): Promise<DayNoteView> {
   const trimmed = content.slice(0, MAX_DAY_NOTE_LENGTH);
+  // Keep the text being replaced as a restore point when it is time for one (see noteExtras.snapshotBeforeSave).
+  const existing = await prisma.dayNote.findUnique({ where: key(scope, day), select: { content: true } });
+  await snapshotBeforeSave(scope, day, existing?.content ?? null, trimmed, actorName);
   const row = await prisma.dayNote.upsert({
     where: key(scope, day),
     create: { scopeType: scope.type, scopeId: scope.id, day, content: trimmed, authorName: actorName },
