@@ -167,7 +167,7 @@ export function EditorAiCommands({
         return;
       }
       const r = table.getBoundingClientRect();
-      setTableBar({ top: r.top > 56 ? r.top - 40 : r.bottom + 6, left: r.left });
+      setTableBar({ top: r.top > 56 ? r.top - 40 : r.bottom + 6, left: Math.max(8, Math.min(r.right - 84, window.innerWidth - 232)) });
     }
     compute();
     editor.on("selectionUpdate", compute);
@@ -613,7 +613,7 @@ export function EditorAiCommands({
             <ChevronDown size={12} className={cn("transition-transform", tableMenuOpen && "rotate-180")} />
           </button>
           {tableMenuOpen && (
-            <div style={{ maxHeight: "min(70vh, 26rem)" }} className="mt-1.5 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
+            <div style={{ maxHeight: Math.min(416, Math.max(160, window.innerHeight - tableBar.top - 56)) }} className="mt-1.5 w-56 overflow-y-auto rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
               {tableGroups.map((group, gi) => (
                 <div key={gi} className={cn(gi > 0 && "mt-1 border-t border-zinc-100 pt-1 dark:border-zinc-800")}>
                   {group.title && <p className="px-2 pb-0.5 pt-1 text-[11px] font-medium uppercase tracking-wider text-zinc-400">{group.title}</p>}

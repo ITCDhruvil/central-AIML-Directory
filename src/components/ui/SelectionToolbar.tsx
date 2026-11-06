@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createNodeFromContent } from "@tiptap/core";
+import { Fragment, Slice } from "@tiptap/pm/model";
 import type { Editor } from "@tiptap/react";
 import {
   Bold,
@@ -167,12 +169,20 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
   function applyResult(markdown: string) {
     const r = range.current;
     if (!r) return;
+    const text = markdown.trim();
+    // Lists, headings, quotes or several paragraphs need block structure; a sentence or two stays inline.
+    const isBlock = /\n\s*\n|^\s*([-*+] |\d+\. |#{1,6} |> )/m.test(text);
+    if (!isBlock) {
+      // insertContentAt already reads Markdown (inline), so the text goes in as-is.
+      editor.chain().focus().insertContentAt(r, text).run();
+      return;
+    }
     const parser = (editor.storage.markdown as unknown as { parser: { parse: (md: string) => string } }).parser;
-    const html = parser.parse(markdown).trim();
-    // One paragraph back into one paragraph, so a sentence stays inline instead of splitting its block.
-    const single = /^<p>([\s\S]*)<\/p>$/.exec(html);
-    const content = single && !/<\/p>\s*<p>/.test(html) ? single[1] : html;
-    editor.chain().focus().insertContentAt(r, content).run();
+    const content = createNodeFromContent(parser.parse(text), editor.schema);
+    const { tr } = editor.state;
+    tr.replaceRange(r.from, r.to, new Slice(Fragment.from(content), 0, 0));
+    editor.view.dispatch(tr.scrollIntoView());
+    editor.commands.focus();
   }
 
   async function run(item: Run, label: string) {
