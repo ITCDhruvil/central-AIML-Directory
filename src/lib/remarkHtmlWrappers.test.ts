@@ -22,8 +22,11 @@ test("wraps aligned blocks, including nested spans inside them", () => {
 });
 
 test("wraps text sizes and spaced, indented blocks", () => {
-  const sized = wrapHtmlSiblings([html('<span data-s="lg">'), text("big"), html("</span>")]);
-  assert.deepEqual(sized[0].data?.hProperties, { className: ["ts", "ts-lg"], "data-wrapper": "s" });
+  const sized = wrapHtmlSiblings([html('<span data-s="18">'), text("big"), html("</span>")]);
+  assert.deepEqual(sized[0].data?.hProperties, { className: ["ts"], style: "font-size:18px", "data-wrapper": "s" });
+  assert.equal(wrapHtmlSiblings([html('<span data-s="lg">'), text("old"), html("</span>")])[0].data?.hProperties?.style, "font-size:18px");
+  const bad = [html('<span data-s="500">'), text("x"), html("</span>")];
+  assert.deepEqual(wrapHtmlSiblings(bad), bad);
   const spaced = wrapHtmlSiblings([html('<div dir="rtl" data-ls="1.5" data-ind="2">'), { type: "paragraph", children: [] }, html("</div>")]);
   assert.equal(spaced[0].data?.hProperties?.style, "line-height:1.5;margin-inline-start:4rem");
   assert.equal(spaced[0].data?.hProperties?.dir, "rtl");

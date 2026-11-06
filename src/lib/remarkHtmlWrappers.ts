@@ -6,6 +6,7 @@
 // (and so still not shown). Pure (no DOM) so it can be tested.
 
 import { blockStyle, parseOpenTag } from "@/lib/blockFormat";
+import { parseFontSize } from "@/lib/fontSize";
 
 type MdNode = {
   type: string;
@@ -16,7 +17,7 @@ type MdNode = {
 
 const HEX = /^#[0-9a-f]{6}$/i;
 const SPAN_OPEN = /^<span data-(c|h)="(#[0-9a-fA-F]{6})">$/;
-const SIZE_OPEN = /^<span data-s="(sm|lg|xl)">$/;
+const SIZE_OPEN = /^<span data-s="([a-z0-9]{1,2})">$/;
 
 type Opened = { tag: "span" | "div"; props: Record<string, unknown> };
 
@@ -29,7 +30,8 @@ function openOf(node: MdNode): Opened | null {
     return { tag: "span", props: { className: [span[1] === "c" ? "tc" : "hl"], style: `--c:${hex}`, "data-wrapper": span[1] } };
   }
   const size = SIZE_OPEN.exec(value);
-  if (size) return { tag: "span", props: { className: ["ts", `ts-${size[1]}`], "data-wrapper": "s" } };
+  const px = size ? parseFontSize(size[1]) : null;
+  if (px) return { tag: "span", props: { className: ["ts"], style: `font-size:${px}px`, "data-wrapper": "s" } };
   const block = parseOpenTag(value);
   if (block) {
     const props: Record<string, unknown> = { style: blockStyle(block) };

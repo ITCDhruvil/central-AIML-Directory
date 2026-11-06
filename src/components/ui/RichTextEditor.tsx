@@ -77,6 +77,7 @@ import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
 import { ColorTools } from "@/components/ui/ColorTools";
+import { FontSizeControl, currentFontSize, stepFontSize } from "@/components/ui/FontSize";
 import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, TextSize, ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, blockFormatAt, setBlockFormat, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
 import { FindReplace } from "@/components/ui/FindReplace";
@@ -485,41 +486,6 @@ const ALIGN_META: Record<Alignment, { label: string; icon: LucideIcon }> = {
 
 const currentAlignment = (editor: Editor): Alignment => blockFormatAt(editor).align;
 const setAlignment = (editor: Editor, align: Alignment) => setBlockFormat(editor, { textAlign: align });
-
-const SIZE_OPTIONS: { value: "sm" | null | "lg" | "xl"; label: string; className: string }[] = [
-  { value: "sm", label: "Small", className: "text-xs" },
-  { value: null, label: "Normal", className: "text-sm" },
-  { value: "lg", label: "Large", className: "text-base" },
-  { value: "xl", label: "Huge", className: "text-lg font-semibold" },
-];
-
-function setTextSize(editor: Editor, value: "sm" | "lg" | "xl" | null) {
-  if (value) editor.chain().focus().setMark("textSize", { size: value }).run();
-  else editor.chain().focus().unsetMark("textSize").run();
-}
-
-/** Smaller or larger text for the selection. */
-function SizeMenu({ editor }: { editor: Editor }) {
-  const [open, setOpen] = useState(false);
-  const current = (editor.getAttributes("textSize").size as string | undefined) ?? null;
-  return (
-    <SplitToolbarGroup label="Text size" icon={ALargeSmall} active={current !== null} open={open} onOpenChange={setOpen}>
-      {SIZE_OPTIONS.map((o) => (
-        <MenuItemWithShortcut
-          key={o.label}
-          icon={ALargeSmall}
-          label={o.label}
-          labelClassName={o.className}
-          active={current === o.value}
-          onClick={() => {
-            setTextSize(editor, o.value);
-            setOpen(false);
-          }}
-        />
-      ))}
-    </SplitToolbarGroup>
-  );
-}
 
 const SPACING_LABEL: Record<string, string> = { "1": "Single", "1.15": "1.15", "1.5": "1.5", "2": "Double" };
 
@@ -987,7 +953,10 @@ function Toolbar({
     );
   }
   if (!shown.has("size")) {
-    SIZE_OPTIONS.forEach((o) => text.push({ icon: ALargeSmall, label: `Text size: ${o.label}`, keep: true, run: () => setTextSize(editor, o.value) }));
+    text.push(
+      { icon: ALargeSmall, label: `Larger text (${currentFontSize(editor)})`, keep: true, run: () => stepFontSize(editor, 1) },
+      { icon: ALargeSmall, label: "Smaller text", keep: true, run: () => stepFontSize(editor, -1) },
+    );
   }
   if (!shown.has("spacing")) {
     const f = blockFormatAt(editor);
@@ -1067,7 +1036,7 @@ function Toolbar({
     headings: <HeadingsMenu editor={editor} />,
     align: <AlignMenu editor={editor} />,
     color: <ColorTools editor={editor} />,
-    size: <SizeMenu editor={editor} />,
+    size: <FontSizeControl editor={editor} />,
     spacing: <SpacingMenu editor={editor} />,
     blocks: (
       <>

@@ -1,6 +1,7 @@
 import { Extension, Mark } from "@tiptap/core";
 import Paragraph from "@tiptap/extension-paragraph";
 import Heading from "@tiptap/extension-heading";
+import { parseFontSize } from "@/lib/fontSize";
 import { MAX_INDENT, isAlignment, isLineHeight, openTag, type Alignment, type BlockFormat } from "@/lib/blockFormat";
 
 export { ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, type Alignment } from "@/lib/blockFormat";
@@ -54,28 +55,24 @@ function colorMark(name: string, dataAttr: "data-c" | "data-h", cls: "tc" | "hl"
   });
 }
 
-export const TEXT_SIZES = ["sm", "lg", "xl"] as const;
-export type TextSizeName = (typeof TEXT_SIZES)[number];
-const isSize = (v: unknown): v is TextSizeName => typeof v === "string" && (TEXT_SIZES as readonly string[]).includes(v);
-
-/** Smaller or larger text: <span data-s="lg">. */
+/** Font size in pixels: <span data-s="18">. The old words (sm, lg, xl) are still read. */
 export const TextSize = Mark.create({
   name: "textSize",
   addAttributes() {
-    return { size: { default: null, parseHTML: (el) => (isSize(el.getAttribute("data-s")) ? el.getAttribute("data-s") : null), rendered: false } };
+    return { size: { default: null, parseHTML: (el) => parseFontSize(el.getAttribute("data-s")), rendered: false } };
   },
   parseHTML() {
-    return [{ tag: "span[data-s]", getAttrs: (el) => (isSize((el as HTMLElement).getAttribute("data-s")) ? {} : false) }];
+    return [{ tag: "span[data-s]", getAttrs: (el) => (parseFontSize((el as HTMLElement).getAttribute("data-s")) ? {} : false) }];
   },
   renderHTML({ mark }) {
-    const size = isSize(mark.attrs.size) ? mark.attrs.size : "lg";
-    return ["span", { "data-s": size, class: `ts ts-${size}` }, 0];
+    const size = parseFontSize(mark.attrs.size) ?? 18;
+    return ["span", { "data-s": String(size), class: "ts", style: `font-size:${size}px` }, 0];
   },
   addStorage() {
     return {
       markdown: {
         serialize: {
-          open: (_state: unknown, mark: { attrs: { size: string } }) => `<span data-s="${isSize(mark.attrs.size) ? mark.attrs.size : "lg"}">`,
+          open: (_state: unknown, mark: { attrs: { size: number } }) => `<span data-s="${parseFontSize(mark.attrs.size) ?? 18}">`,
           close: "</span>",
           mixable: true,
           expelEnclosingWhitespace: true,
