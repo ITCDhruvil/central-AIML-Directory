@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import type { Editor } from "@tiptap/core";
 import { AlertCircle, AudioLines, Check, ImageIcon, Link2, Loader2, Trash2, UploadCloud, Video, X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { buildImageSrc, parseImageSrc } from "@/lib/imageSrc";
 import { formatBytes, MAX_MEDIA_BYTES, MEDIA_ACCEPT, safeMediaSrc, type MediaKind } from "@/lib/media";
 
 const KINDS: { kind: MediaKind; label: string; icon: typeof ImageIcon; hint: string }[] = [
@@ -47,9 +48,9 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
   const [kind, setKind] = useState<MediaKind>(initialKind);
   const [mode, setMode] = useState<"upload" | "link">(editingImage ? "link" : "upload");
   const [picked, setPicked] = useState<Picked | null>(
-    editingImage ? { url: (editor.getAttributes("image").src as string) ?? "", name: (editor.getAttributes("image").alt as string) ?? "" } : null,
+    editingImage ? { url: parseImageSrc((editor.getAttributes("image").src as string) ?? "").base, name: (editor.getAttributes("image").alt as string) ?? "" } : null,
   );
-  const [link, setLink] = useState(editingImage ? ((editor.getAttributes("image").src as string) ?? "") : "");
+  const [link, setLink] = useState(editingImage ? parseImageSrc((editor.getAttributes("image").src as string) ?? "").base : "");
   const [progress, setProgress] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -110,7 +111,12 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
     if (!picked?.url) return;
     const name = picked.name.replace(/\.[a-z0-9]{2,5}$/i, "") && picked.name;
     if (kind === "image") {
-      if (editingImage) editor.chain().focus().updateAttributes("image", { src: picked.url, alt: name }).run();
+      if (editingImage) {
+        // A new picture keeps the old one's size and alignment, but not its crop.
+        const { opts } = parseImageSrc((editor.getAttributes("image").src as string) ?? "");
+        const src = buildImageSrc(parseImageSrc(picked.url).base, { w: opts.w, a: opts.a });
+        editor.chain().focus().updateAttributes("image", { src, alt: name }).run();
+      }
       else editor.chain().focus().setImage({ src: picked.url, alt: name }).run();
     } else {
       editor.chain().focus().insertContent({ type: "media", attrs: { kind, src: picked.url, name } }).run();

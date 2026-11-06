@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Children, isValidElement } from "react";
 import { ChatTable } from "@/components/ChatTable";
 import { chartToSvg, CHART_LANG, parseChartSpec } from "@/lib/chartSpec";
+import { ImageFigure } from "@/components/ImageFigure";
 import { parseMediaAlt } from "@/lib/media";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -59,8 +60,7 @@ const PAGE_COMPONENTS: Components = {
     const media = parseMediaAlt(alt);
     if (media?.kind === "video") return <video src={src} controls preload="metadata" className="my-3 w-full max-w-2xl rounded-xl bg-black" />;
     if (media?.kind === "audio") return <audio src={src} controls preload="metadata" className="my-3 w-full max-w-xl" />;
-    // eslint-disable-next-line @next/next/no-img-element
-    return <img src={src} alt={alt ?? ""} className="my-3 max-w-full rounded-lg" />;
+    return <ImageFigure src={src} alt={alt ?? ""} />;
   },
 };
 

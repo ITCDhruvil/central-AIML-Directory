@@ -55,7 +55,7 @@ const BTN_ON = "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-ora
  * heading, lists, quote) and an AI menu that rewrites just the selection (edit with a prompt, improve, fix, shorter,
  * longer, simplify, change tone, translate). Results replace the selection in one step, so Undo brings it back.
  */
-export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null) => void }) {
+export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (label: string | null, pos?: number) => void }) {
   const [pos, setPos] = useState<Pos | null>(null);
   const [mode, setMode] = useState<"bar" | "ai" | "prompt">("bar");
   const [promptValue, setPromptValue] = useState("");
@@ -192,7 +192,7 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
     if (!selected.trim()) return;
     setRunning(true);
     setError(null);
-    onBusy(label);
+    onBusy(label, r.to);
     try {
       const res =
         item.kind === "transform"

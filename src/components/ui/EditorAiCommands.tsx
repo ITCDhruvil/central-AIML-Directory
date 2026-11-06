@@ -114,7 +114,7 @@ export function EditorAiCommands({
 }: {
   editor: Editor;
   projectId?: string;
-  onBusy: (label: string | null) => void;
+  onBusy: (label: string | null, pos?: number) => void;
   /** When true, inline AI autocomplete suggests a continuation as grey text after a typing pause. */
   autocomplete?: boolean;
 }) {
@@ -400,7 +400,7 @@ export function EditorAiCommands({
       setError(fallback.error);
       return;
     }
-    onBusy("Building a chart…");
+    onBusy("Building a chart…", table.pos + table.node.nodeSize);
     setError(null);
     try {
       const sample = rows.slice(0, 12).map((r, i) => `${i === 0 && hasHeader ? "header" : `row${i}`}: ${r.map((c, j) => `[${j}] ${c}`).join(" | ")}`);
@@ -517,7 +517,7 @@ export function EditorAiCommands({
   }
 
   async function runTransform(action: string) {
-    onBusy("Working on your note…");
+    onBusy("Working on your note…", -1);
     setError(null);
     try {
       const res = await fetch("/api/ai/transform-text", {
@@ -545,7 +545,7 @@ export function EditorAiCommands({
       setError("Write something first, then continue.");
       return;
     }
-    onBusy("Continuing…");
+    onBusy("Continuing…", -1);
     setError(null);
     try {
       const res = await fetch("/api/ai/compose", {
@@ -628,7 +628,7 @@ export function EditorAiCommands({
     if (!value) return;
     setRunning(true);
     setError(null);
-    onBusy(prompt.kind === "ask" ? "Searching the documents…" : "Writing…");
+    onBusy(prompt.kind === "ask" ? "Searching the documents…" : prompt.kind === "edit" ? "Editing…" : "Writing…", prompt.at ? prompt.at.from : -1);
     try {
       if (prompt.kind === "ask" && projectId) {
         const res = await fetch(`/api/projects/${projectId}/assistant`, {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -12,7 +12,7 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import { Extension } from "@tiptap/core";
 import { Table, TableCell, TableHeader, TableRow } from "@tiptap/extension-table";
-import { Image } from "@tiptap/extension-image";
+import { ResizableImage } from "@/components/ui/ResizableImage";
 import { Markdown } from "tiptap-markdown";
 import {
   Bold,
@@ -112,7 +112,7 @@ const EDITOR_CLASSES = [
   "[&_ul[data-type=taskList]_li>label]:mt-1 [&_ul[data-type=taskList]_li>div]:flex-1",
   "[&_sub]:align-sub [&_sub]:text-[0.75em] [&_sup]:align-super [&_sup]:text-[0.75em]",
   "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-zinc-400 [&_.is-empty::before]:content-[attr(data-placeholder)] dark:[&_.is-empty::before]:text-zinc-500",
-  "[&_.ProseMirror-selectednode]:rounded-md [&_.ProseMirror-selectednode]:bg-blue-500/10 [&_.ProseMirror-selectednode]:outline [&_.ProseMirror-selectednode]:outline-2 [&_.ProseMirror-selectednode]:outline-blue-500/40",
+  "[&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:rounded-md [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:bg-blue-500/10 [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline-2 [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline-blue-500/40",
 ].join(" ");
 
 const IS_MAC =
@@ -813,6 +813,37 @@ function Toolbar({
  * every other text field in the app, so storage and safe rendering
  * elsewhere (MarkdownView) don't change. Never stores or emits raw HTML.
  */
+/** A single shimmering status line ("Writing…") right where the AI content is about to appear. */
+function AiWritingSkeleton({ editor, label, pos }: { editor: Editor; label: string; pos?: number }) {
+  const [at, setAt] = useState<{ top: number; left: number; width: number } | null>(null);
+  const holder = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const parent = holder.current?.parentElement;
+    if (!parent) return;
+    const box = parent.getBoundingClientRect();
+    const pm = editor.view.dom as HTMLElement;
+    const pmBox = pm.getBoundingClientRect();
+    const pad = parseFloat(getComputedStyle(pm).paddingLeft) || 12;
+    const size = editor.state.doc.content.size;
+    // Rewriting the whole note starts at the top; otherwise it appears right below the anchor.
+    const top =
+      pos === undefined
+        ? 12
+        : editor.view.coordsAtPos(Math.max(1, Math.min(pos < 0 ? size - 1 : pos + 1, size))).bottom - box.top + 10;
+    setAt({ top: Math.max(8, top), left: pmBox.left - box.left + pad, width: pmBox.width - pad - 16 });
+  }, [editor, pos]);
+
+  return (
+    <div ref={holder} role="status" aria-live="polite" className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
+      {at && (
+        <div style={{ top: at.top, left: at.left, width: at.width }} className="absolute">
+          <TextShimmer className="text-sm font-medium">{label}</TextShimmer>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function RichTextEditor({
   value,
   onChange,
@@ -828,7 +859,9 @@ export function RichTextEditor({
   projectId?: string;
 }) {
   // Set while an AI action is rewriting the text: shows the status over the text area and blocks typing meanwhile.
-  const [busy, setBusy] = useState<string | null>(null);
+  const [busy, setBusyState] = useState<{ label: string; pos?: number } | null>(null);
+  // `pos` is where the result will land (-1 = end of the note); without it the whole note is being rewritten.
+  const setBusy = useCallback((label: string | null, pos?: number) => setBusyState(label ? { label, pos } : null), []);
   // Opt-in inline AI autocomplete (grey suggestions; Tab to accept).
   const [autocomplete, setAutocomplete] = useState(false);
 
@@ -840,7 +873,7 @@ export function RichTextEditor({
       TableRow,
       TableHeader,
       TableCell,
-      Image,
+      ResizableImage,
       Underline,
       Subscript,
       Superscript,
@@ -897,14 +930,10 @@ export function RichTextEditor({
           editor={editor}
           className={cn(
             "min-h-0 flex-1 overflow-y-auto transition-opacity [&_.ProseMirror]:min-h-[12rem] [&_.ProseMirror]:h-full",
-            busy && "opacity-40",
+            busy && busy.pos === undefined && "opacity-40",
           )}
         />
-        {busy && (
-          <div role="status" aria-live="polite" className="absolute inset-0 z-10 flex items-center justify-center backdrop-blur-[1.5px]">
-            <TextShimmer className="text-base font-medium">{busy}</TextShimmer>
-          </div>
-        )}
+        {busy && editor && <AiWritingSkeleton editor={editor} label={busy.label} pos={busy.pos} />}
       </div>
     </div>
   );
