@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  AudioLines,
+  ImageIcon,
+  Video,
   ArrowDownAZ,
   ArrowUpAZ,
   ChevronUp,
@@ -42,7 +45,7 @@ import {
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
 import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
-import { CHART_LANG, parseChartSpec, serializeChartSpec, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
+import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
 
@@ -59,7 +62,11 @@ const BASE_COMMANDS: Command[] = [
   { id: "write", label: "Write", hint: "Generate content from a prompt", icon: Sparkles, run: "prompt-write" },
   { id: "continue", label: "Continue writing", hint: "Pick up where the text ends", icon: ArrowRight, run: "continue" },
   { id: "table", label: "Table", hint: "Generate a table from a prompt", icon: Table2, run: "prompt-table" },
+  { id: "media-image", label: "Image", hint: "Upload or link an image", icon: ImageIcon, run: "media:image" },
+  { id: "media-video", label: "Video", hint: "Upload or link a video", icon: Video, run: "media:video" },
+  { id: "media-audio", label: "Audio", hint: "Upload or link an audio clip", icon: AudioLines, run: "media:audio" },
   { id: "chart-bar", label: "Table \u2192 Bar chart", hint: "Turn the nearest table into a bar chart", icon: ChartColumn, run: "chart:bar" },
+  { id: "chart-auto", label: "Table → Chart with AI", hint: "AI picks the best chart for the nearest table", icon: Sparkles, run: "chart:ai" },
   { id: "chart-line", label: "Table \u2192 Line chart", hint: "Turn the nearest table into a line chart", icon: ChartLine, run: "chart:line" },
   { id: "chart-pie", label: "Table \u2192 Pie chart", hint: "Turn the nearest table into a pie chart", icon: ChartPie, run: "chart:pie" },
   { id: "chart-ai", label: "Chart from prompt", hint: "Describe the data; AI builds the chart", icon: Sparkles, run: "prompt-chart" },
@@ -379,6 +386,82 @@ export function EditorAiCommands({
     insertChartAfter(table, result.spec);
   }
 
+  /**
+   * AI picks the chart type, a title and which columns to plot, from the table's headers and a few rows. The numbers and
+   * labels are then read from the table itself, so the chart always matches the data exactly. Falls back to a plain bar
+   * chart if the AI's answer can't be used.
+   */
+  async function chartWithAi(table: FoundTable) {
+    const { rows, hasHeader } = tableRows(table.node);
+    const fallback = tableToChartSpec(rows, "bar", hasHeader);
+    if (!fallback.ok) {
+      setError(fallback.error);
+      return;
+    }
+    onBusy("Building a chart…");
+    setError(null);
+    try {
+      const sample = rows.slice(0, 12).map((r, i) => `${i === 0 && hasHeader ? "header" : `row${i}`}: ${r.map((c, j) => `[${j}] ${c}`).join(" | ")}`);
+      const res = await fetch("/api/ai/compose", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "write",
+          prompt:
+            "Choose the best chart for this table. Columns are numbered from 0 as [n]. " +
+            'Return ONLY JSON: {"type":"bar"|"line"|"pie","title":string,"labelColumn":number,"valueColumns":number[]}. ' +
+            "labelColumn is the column holding the category names (or dates for a line chart); valueColumns are the numeric columns worth comparing " +
+            "(a pie uses exactly one; skip ids, years used as labels and columns that are text). " +
+            'Use "line" for values over time, "pie" for shares of a whole, otherwise "bar". The title must describe what the table shows, using its own words.',
+          text: sample.join("\n"),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      let spec = fallback.spec;
+      if (res.ok) {
+        try {
+          const pick = JSON.parse(String(body.text ?? "").replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
+          const type = ["bar", "line", "pie"].includes(pick.type) ? (pick.type as ChartType) : "bar";
+          const built = specFromColumns(rows, hasHeader, {
+            type,
+            title: typeof pick.title === "string" ? pick.title : undefined,
+            labelColumn: Number(pick.labelColumn),
+            valueColumns: Array.isArray(pick.valueColumns) ? pick.valueColumns.map(Number) : [],
+          });
+          if (built.ok) spec = built.spec;
+        } catch {
+          // keep the plain bar chart
+        }
+      } else {
+        setError(body.error ?? "The AI tool is unavailable, so a plain chart was used.");
+      }
+      insertChartAfter(table, spec);
+    } catch {
+      setError("Network error — please try again.");
+    } finally {
+      onBusy(null);
+    }
+  }
+
+  function chartWithAiFromCursor() {
+    const table = targetTable();
+    if (!table) setError("Add a table first (for example type /3x4), then chart it.");
+    else void chartWithAi(table);
+  }
+
+  // The chart's "Update from table" button asks for the table right above it to be charted again.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onChartAi = (e: Event) => {
+      const pos = (e as CustomEvent<{ pos: number }>).detail?.pos;
+      const before = typeof pos === "number" ? editor.state.doc.resolve(pos).nodeBefore : null;
+      if (before && before.type.name === "table") void chartWithAi({ node: before, pos: pos - before.nodeSize });
+    };
+    dom.addEventListener("chart-ai", onChartAi);
+    return () => dom.removeEventListener("chart-ai", onChartAi);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor]);
+
   function appendMarkdown(md: string) {
     const current = currentMarkdown().trimEnd();
     editor.commands.setContent(current ? `${current}\n\n${md}` : md);
@@ -471,6 +554,10 @@ export function EditorAiCommands({
     } else if (cmd.run === "prompt-chart") {
       setPromptValue("");
       setPrompt({ kind: "chart", ...pos });
+    } else if (cmd.run.startsWith("media:")) {
+      editor.view.dom.dispatchEvent(new CustomEvent("open-media", { detail: { kind: cmd.run.slice(6) } }));
+    } else if (cmd.run === "chart:ai") {
+      chartWithAiFromCursor();
     } else if (cmd.run.startsWith("chart:")) {
       chartFromTable(cmd.run.slice(6) as ChartType);
     } else if (cmd.run === "continue") {
@@ -595,6 +682,7 @@ export function EditorAiCommands({
     {
       title: "Chart",
       items: [
+        { icon: Sparkles, label: "Chart with AI", closes: true, act: () => chartWithAiFromCursor() },
         { icon: ChartColumn, label: "Bar chart", closes: true, act: () => chartFromTable("bar") },
         { icon: ChartLine, label: "Line chart", closes: true, act: () => chartFromTable("line") },
         { icon: ChartPie, label: "Pie chart", closes: true, act: () => chartFromTable("pie") },

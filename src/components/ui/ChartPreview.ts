@@ -1,12 +1,12 @@
 import { Extension } from "@tiptap/core";
-import { Plugin, TextSelection } from "@tiptap/pm/state";
+import { Plugin } from "@tiptap/pm/state";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
-import { chartToSvg, CHART_LANG, parseChartSpec } from "@/lib/chartSpec";
+import { chartToSvg, CHART_LANG, CHART_TYPES, parseChartSpec, serializeChartSpec } from "@/lib/chartSpec";
 
 /**
  * Shows a chart under every ```chart block and hides the block's JSON, so a note reads like a document and not code.
- * "Edit data" reveals the JSON for editing (it hides again when the cursor leaves it); "Remove" deletes the chart. A
- * block whose JSON isn't valid yet stays visible so it can be fixed.
+ * The JSON is never shown for a valid chart: the buttons switch the chart type, rebuild it from the table above with AI, or
+ * remove it. A block whose JSON isn't valid stays visible so it can be fixed.
  */
 export const ChartPreview = Extension.create({
   name: "chartPreview",
@@ -17,16 +17,15 @@ export const ChartPreview = Extension.create({
         props: {
           decorations(state) {
             const decorations: Decoration[] = [];
-            const { from, to } = state.selection;
-            state.doc.descendants((node, pos) => {
+                        state.doc.descendants((node, pos) => {
               if (node.type.name !== "codeBlock" || node.attrs.language !== CHART_LANG) return;
               const text = node.textContent;
               const spec = parseChartSpec(text);
               const size = node.nodeSize;
-              const editing = from >= pos && to <= pos + size;
+              const afterTable = state.doc.resolve(pos).nodeBefore?.type.name === "table";
 
               // Hide the JSON while the chart is valid and the cursor is elsewhere.
-              if (spec) decorations.push(Decoration.node(pos, pos + size, { class: editing ? "chart-source chart-editing" : "chart-source" }));
+              if (spec) decorations.push(Decoration.node(pos, pos + size, { class: "chart-source" }));
 
               decorations.push(
                 Decoration.widget(
@@ -59,13 +58,24 @@ export const ChartPreview = Extension.create({
                       });
                       return b;
                     };
-                    actions.appendChild(
-                      button(editing ? "Editing data" : "Edit data", () => {
+                    for (const type of CHART_TYPES) {
+                      const b = button(type === "bar" ? "Bar" : type === "line" ? "Line" : "Pie", () => {
                         const at = nodePos();
-                        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, at + 1)).scrollIntoView());
-                        view.focus();
-                      }),
-                    );
+                        const node = view.state.doc.nodeAt(at);
+                        if (!node || spec.type === type) return;
+                        const text = serializeChartSpec({ ...spec, type });
+                        view.dispatch(view.state.tr.replaceWith(at + 1, at + node.nodeSize - 1, view.state.schema.text(text)));
+                      });
+                      if (spec.type === type) b.className = "active";
+                      actions.appendChild(b);
+                    }
+                    if (afterTable) {
+                      actions.appendChild(
+                        button("✨ Update from table", () => {
+                          view.dom.dispatchEvent(new CustomEvent("chart-ai", { detail: { pos: nodePos() } }));
+                        }),
+                      );
+                    }
                     actions.appendChild(
                       button("Remove chart", () => {
                         const at = nodePos();
@@ -76,7 +86,7 @@ export const ChartPreview = Extension.create({
                     box.appendChild(actions);
                     return box;
                   },
-                  { side: -1, key: `chart-${editing ? "e" : "v"}-${text}` },
+                  { side: -1, key: `chart-${afterTable ? "t" : "n"}-${text}` },
                 ),
               );
               return false;

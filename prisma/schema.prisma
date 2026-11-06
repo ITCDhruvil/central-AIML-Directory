@@ -366,6 +366,20 @@ model DocumentFile {
   createdAt   DateTime      @default(now())
 }
 
+// An image, video or audio file added to a note or document from the editor. Served to signed-in people only, at
+// /api/media/<id>; the note itself just holds that link.
+model MediaFile {
+  id          String   @id @default(cuid())
+  userId      String?
+  name        String
+  contentType String
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+}
+
 // Directory-wide ("catalog") or per-project AI suggestions. Regenerating updates
 // matching cards in place (see insightFingerprint) and may add new ones.
 model Insight {

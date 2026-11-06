@@ -65,6 +65,9 @@ import { SelectionToolbar } from "@/components/ui/SelectionToolbar";
 import { GhostText } from "@/components/ui/GhostText";
 import { ChartPreview } from "@/components/ui/ChartPreview";
 import { TableAutoFit } from "@/components/ui/tableOps";
+import { Media } from "@/components/ui/MediaExtension";
+import { MediaDialog } from "@/components/ui/MediaDialog";
+import type { MediaKind } from "@/lib/media";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   TEXT_TRANSFORM_LANGUAGES,
@@ -91,6 +94,8 @@ const EDITOR_CLASSES = [
   "[&_hr]:my-3 [&_hr]:border-zinc-200 dark:[&_hr]:border-zinc-800",
   // Tables: a soft rounded frame, light row lines, a tinted header, a hover row, and a visible column-drag handle.
   "[&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-xl [&_.tableWrapper]:border [&_.tableWrapper]:border-zinc-200 dark:[&_.tableWrapper]:border-zinc-700/70",
+  // Once columns have fixed widths (dragged or fitted) the frame shrinks to the table instead of staying full width.
+  "[&_.tableWrapper:has([colwidth])]:w-fit [&_.tableWrapper:has([colwidth])]:max-w-full",
   "[&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:text-left [&_table]:text-sm",
   "[&_th]:relative [&_th]:border-b [&_th]:border-zinc-200 [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-zinc-600 dark:[&_th]:border-zinc-700/70 dark:[&_th]:bg-zinc-800/60 dark:[&_th]:text-zinc-300",
   "[&_td]:relative [&_td]:border-b [&_td]:border-zinc-100 [&_td]:px-3 [&_td]:py-2 dark:[&_td]:border-zinc-800",
@@ -529,35 +534,6 @@ function TableMenu({ editor }: { editor: Editor }) {
   );
 }
 
-/** Only http(s) addresses, so an image cannot be a script URL. */
-function imageUrl(raw: string): string | null {
-  try {
-    const url = new URL(raw.trim());
-    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-    return url.toString();
-  } catch {
-    return null;
-  }
-}
-
-function insertOrEditImage(editor: Editor) {
-  const previous = (editor.getAttributes("image").src as string | undefined) ?? "";
-  const entered = window.prompt("Image URL", previous);
-  if (entered === null) return;
-  if (!entered.trim()) {
-    if (editor.isActive("image")) editor.chain().focus().deleteSelection().run();
-    return;
-  }
-  const src = imageUrl(entered);
-  if (!src) {
-    window.alert("Use an image address that starts with http:// or https://.");
-    return;
-  }
-  const chain = editor.chain().focus();
-  if (editor.isActive("image")) chain.updateAttributes("image", { src }).run();
-  else chain.setImage({ src }).run();
-}
-
 function AiMenuItem({ icon: Icon, label, onClick }: { icon: LucideIcon; label: string; onClick: () => void }) {
   return (
     <button
@@ -747,8 +723,18 @@ function Toolbar({
   autocomplete: boolean;
   onToggleAutocomplete: () => void;
 }) {
+  const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
+  // The slash menu (/image, /video, /audio) asks the toolbar to open the same dialog.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const open = (e: Event) => setMediaKind((e as CustomEvent<{ kind: MediaKind }>).detail?.kind ?? "image");
+    dom.addEventListener("open-media", open);
+    return () => dom.removeEventListener("open-media", open);
+  }, [editor]);
+
   return (
     <div className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-zinc-50 px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-950">
+      {mediaKind && <MediaDialog editor={editor} initialKind={mediaKind} onClose={() => setMediaKind(null)} />}
       <AiMenu editor={editor} onBusy={onBusy} />
       <button
         type="button"
@@ -790,10 +776,10 @@ function Toolbar({
       <ToolbarButton label="Divider" icon={Minus} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
       <TableMenu editor={editor} />
       <ToolbarButton
-        label="Image"
+        label="Image, video or audio"
         icon={ImageIcon}
-        active={editor.isActive("image")}
-        onClick={() => insertOrEditImage(editor)}
+        active={editor.isActive("image") || editor.isActive("media")}
+        onClick={() => setMediaKind("image")}
       />
       <ToolbarButton
         label="Link"
@@ -859,6 +845,7 @@ export function RichTextEditor({
       ExtraKeyboardShortcuts,
       GhostText,
       ChartPreview,
+      Media,
       TableAutoFit,
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,

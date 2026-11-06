@@ -108,6 +108,35 @@ export function tableToChartSpec(
   return { ok: true, spec: { type, labels: labels.slice(0, MAX_LABELS), series: kept } };
 }
 
+/**
+ * Builds a chart from the columns someone (or the AI) picked: the labels come from `labelColumn`, one series from each
+ * of `valueColumns` (0-based). The numbers are always read from the table itself, so they can't be mis-copied.
+ */
+export function specFromColumns(
+  rows: string[][],
+  hasHeader: boolean,
+  pick: { type: ChartType; title?: string; labelColumn: number; valueColumns: number[] },
+): { ok: true; spec: ChartSpec } | { ok: false; error: string } {
+  const header = hasHeader ? rows[0] : null;
+  const body = hasHeader ? rows.slice(1) : rows;
+  if (body.length === 0) return { ok: false, error: "The table has no data rows to chart." };
+  const width = Math.max(...rows.map((r) => r.length));
+  const valid = (c: number) => Number.isInteger(c) && c >= 0 && c < width;
+  if (!valid(pick.labelColumn)) return { ok: false, error: "The label column is not in the table." };
+  const series: ChartSeries[] = [];
+  for (const c of pick.valueColumns) {
+    if (!valid(c) || c === pick.labelColumn) continue;
+    const parsed = body.map((r) => parseNumber(r[c] ?? ""));
+    if (parsed.filter((v) => v !== null).length === 0) continue;
+    series.push({ name: (header?.[c] ?? "").trim() || `Column ${c + 1}`, data: parsed.map((v) => v ?? 0) });
+  }
+  if (series.length === 0) return { ok: false, error: "None of the picked columns hold numbers." };
+  const labels = body.map((r, i) => (r[pick.labelColumn] ?? "").trim() || `Row ${i + 1}`);
+  const kept = (pick.type === "pie" ? series.slice(0, 1) : series.slice(0, MAX_SERIES)).map((s) => ({ ...s, data: s.data.slice(0, MAX_LABELS) }));
+  const title = pick.title?.trim().slice(0, 120);
+  return { ok: true, spec: { type: pick.type, ...(title ? { title } : {}), labels: labels.slice(0, MAX_LABELS), series: kept } };
+}
+
 // ---------------------------------------------------------------------------------------------------------------
 // Drawing (SVG string)
 // ---------------------------------------------------------------------------------------------------------------
