@@ -62,6 +62,7 @@ import { cn } from "@/lib/cn";
 import { cleanPastedHtml } from "@/lib/cleanPastedHtml";
 import { EditorAiCommands } from "@/components/ui/EditorAiCommands";
 import { GhostText } from "@/components/ui/GhostText";
+import { ChartPreview } from "@/components/ui/ChartPreview";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   TEXT_TRANSFORM_LANGUAGES,
@@ -851,6 +852,7 @@ export function RichTextEditor({
       Superscript,
       ExtraKeyboardShortcuts,
       GhostText,
+      ChartPreview,
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true }),

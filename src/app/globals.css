@@ -446,3 +446,21 @@ input.autofill-clean:-webkit-autofill:focus {
 .dark .ghost-text {
   color: #71717a;
 }
+
+/* Charts in the editor (components/ui/ChartPreview.ts): a live drawing under each ```chart block, whose JSON stays editable. */
+.chart-preview {
+  margin: 0.25rem 0 1rem;
+  color: #52525b;
+}
+.dark .chart-preview {
+  color: #a1a1aa;
+}
+.chart-preview-error {
+  font-size: 0.75rem;
+  color: #d97706;
+}
+.ProseMirror pre:has(> code.language-chart) {
+  max-height: 6.5rem;
+  overflow: auto;
+  opacity: 0.8;
+}

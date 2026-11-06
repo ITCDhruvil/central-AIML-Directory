@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { Children, isValidElement } from "react";
 import { ChatTable } from "@/components/ChatTable";
+import { chartToSvg, CHART_LANG, parseChartSpec } from "@/lib/chartSpec";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -38,7 +40,22 @@ const WRAPPER_CLASSES = [
 const CHAT_TABLE_CLASSES =
   "[&_td]:break-words [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-zinc-500 dark:[&_th]:bg-zinc-800/60 dark:[&_th]:text-zinc-400 [&_tbody_tr]:border-t [&_tbody_tr]:border-zinc-100 dark:[&_tbody_tr]:border-zinc-800 [&_tbody_tr:hover]:bg-orange-50/50 dark:[&_tbody_tr:hover]:bg-orange-500/5";
 
+// A ```chart block (see lib/chartSpec.ts) is drawn as a chart; if its JSON is invalid it falls back to a plain code block.
+const PAGE_COMPONENTS: Components = {
+  pre: ({ children }) => {
+    const child = Children.toArray(children)[0];
+    if (isValidElement<{ className?: string; children?: React.ReactNode }>(child) && child.props.className?.split(" ").includes(`language-${CHART_LANG}`)) {
+      const spec = parseChartSpec(String(child.props.children ?? ""));
+      if (spec) {
+        return <div className="my-3 text-zinc-500 dark:text-zinc-400" dangerouslySetInnerHTML={{ __html: chartToSvg(spec) }} />;
+      }
+    }
+    return <pre>{children}</pre>;
+  },
+};
+
 const CHAT_COMPONENTS: Components = {
+  ...PAGE_COMPONENTS,
   // Scrolls sideways inside its own frame, and gets a search box and pages once it is long (see ChatTable).
   table: ({ children }) => <ChatTable>{children}</ChatTable>,
   // Links to pages in this app navigate without a reload; anything else opens in a new tab.
@@ -80,7 +97,9 @@ export function MarkdownView({
   }
   return (
     <div className={WRAPPER_CLASSES}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={PAGE_COMPONENTS}>
+        {content}
+      </ReactMarkdown>
     </div>
   );
 }

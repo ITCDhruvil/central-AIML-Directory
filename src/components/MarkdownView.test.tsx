@@ -35,3 +35,18 @@ test("MarkdownView does not execute Markdown link/image injection tricks as raw 
   // it's inert text like the script/img cases above.
   assert.ok(!html.includes('<a href="javascript:alert(1)">link</a>'), "raw HTML anchor must not be rendered verbatim");
 });
+
+test("MarkdownView draws a ```chart block as an SVG chart and escapes its text", () => {
+  const spec = JSON.stringify({ type: "bar", labels: ["Jan", "<b>x</b>"], series: [{ name: "Sales", data: [3, 5] }] });
+  const html = renderToStaticMarkup(<MarkdownView content={"```chart\n" + spec + "\n```"} />);
+  assert.ok(html.includes("<svg"), "a chart block becomes an SVG");
+  assert.ok(html.includes("Jan"), "labels are drawn");
+  assert.ok(!html.includes("<b>x</b>"), "label text is escaped, never injected as markup");
+});
+
+test("MarkdownView shows a ```chart block with invalid JSON as an ordinary code block", () => {
+  const html = renderToStaticMarkup(<MarkdownView content={"```chart\nnot json\n```"} />);
+  assert.ok(!html.includes("<svg"));
+  assert.ok(html.includes("not json"));
+  assert.ok(html.includes("<pre"));
+});

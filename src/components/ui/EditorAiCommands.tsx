@@ -3,6 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  ChartColumn,
+  ChartLine,
+  ChartPie,
   ArrowDown,
   ArrowLeft,
   ArrowRight,
@@ -28,7 +31,9 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
+import { CHART_LANG, parseChartSpec, serializeChartSpec, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
 
@@ -45,6 +50,10 @@ const BASE_COMMANDS: Command[] = [
   { id: "write", label: "Write", hint: "Generate content from a prompt", icon: Sparkles, run: "prompt-write" },
   { id: "continue", label: "Continue writing", hint: "Pick up where the text ends", icon: ArrowRight, run: "continue" },
   { id: "table", label: "Table", hint: "Generate a table from a prompt", icon: Table2, run: "prompt-table" },
+  { id: "chart-bar", label: "Table \u2192 Bar chart", hint: "Turn the nearest table into a bar chart", icon: ChartColumn, run: "chart:bar" },
+  { id: "chart-line", label: "Table \u2192 Line chart", hint: "Turn the nearest table into a line chart", icon: ChartLine, run: "chart:line" },
+  { id: "chart-pie", label: "Table \u2192 Pie chart", hint: "Turn the nearest table into a pie chart", icon: ChartPie, run: "chart:pie" },
+  { id: "chart-ai", label: "Chart from prompt", hint: "Describe the data; AI builds the chart", icon: Sparkles, run: "prompt-chart" },
   { id: "summarize", label: "Summarize", hint: "Add a short summary of the note", icon: ClipboardList, run: "note:summarize" },
   { id: "actions", label: "Action items", hint: "Extract a to-do checklist", icon: ListChecks, run: "note:action-items" },
   { id: "improve", label: "Improve", hint: "Rewrite and polish the whole note", icon: WandSparkles, run: "improve" },
@@ -67,7 +76,7 @@ const TEMPLATES: Record<string, string> = {
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
 type Pos = { top: number; left: number };
-type Prompt = { kind: "write" | "ask" | "custom" | "table"; selection?: { from: number; to: number } } & Pos;
+type Prompt = { kind: "write" | "ask" | "custom" | "table" | "chart"; selection?: { from: number; to: number } } & Pos;
 
 function caretPos(editor: Editor): Pos {
   const { from } = editor.state.selection;
@@ -282,6 +291,69 @@ export function EditorAiCommands({
 
   const currentMarkdown = () => editor.storage.markdown.getMarkdown() as string;
 
+  type FoundTable = { node: PMNode; pos: number };
+
+  /** The table the cursor is in, else the nearest one above the cursor, else the last table in the note. */
+  function targetTable(): FoundTable | null {
+    const { state } = editor;
+    const { $from } = state.selection;
+    for (let d = $from.depth; d > 0; d -= 1) {
+      if ($from.node(d).type.name === "table") return { node: $from.node(d), pos: $from.before(d) };
+    }
+    const found: { before: FoundTable | null; last: FoundTable | null } = { before: null, last: null };
+    state.doc.descendants((node, pos) => {
+      if (node.type.name !== "table") return true;
+      found.last = { node, pos };
+      if (pos + node.nodeSize <= $from.pos) found.before = { node, pos };
+      return false;
+    });
+    return found.before ?? found.last;
+  }
+
+  function tableRows(table: PMNode): { rows: string[][]; hasHeader: boolean } {
+    const rows: string[][] = [];
+    let hasHeader = false;
+    table.forEach((row, _offset, index) => {
+      const cells: string[] = [];
+      row.forEach((cell) => {
+        cells.push(cell.textContent.trim());
+        if (index === 0 && cell.type.name === "tableHeader") hasHeader = true;
+      });
+      rows.push(cells);
+    });
+    return { rows, hasHeader };
+  }
+
+  /** Puts a ```chart block right after the table (replacing one already there, so re-charting updates it). */
+  function insertChartAfter(table: FoundTable, spec: ChartSpec) {
+    const end = table.pos + table.node.nodeSize;
+    const next = editor.state.doc.nodeAt(end);
+    const block = { type: "codeBlock", attrs: { language: CHART_LANG }, content: [{ type: "text", text: serializeChartSpec(spec) }] };
+    const replacing = next !== null && next.type.name === "codeBlock" && next.attrs.language === CHART_LANG;
+    // A chart at the very end of the note needs a paragraph after it, so there is somewhere to keep typing.
+    const content = next === null ? [block, { type: "paragraph" }] : block;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt(replacing && next ? { from: end, to: end + next.nodeSize } : end, content)
+      .run();
+  }
+
+  function chartFromTable(type: ChartType) {
+    const table = targetTable();
+    if (!table) {
+      setError("Add a table first (for example type /3x4), then chart it.");
+      return;
+    }
+    const { rows, hasHeader } = tableRows(table.node);
+    const result = tableToChartSpec(rows, type, hasHeader);
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    insertChartAfter(table, result.spec);
+  }
+
   function appendMarkdown(md: string) {
     const current = currentMarkdown().trimEnd();
     editor.commands.setContent(current ? `${current}\n\n${md}` : md);
@@ -371,6 +443,11 @@ export function EditorAiCommands({
     } else if (cmd.run === "prompt-table") {
       setPromptValue("");
       setPrompt({ kind: "table", ...pos });
+    } else if (cmd.run === "prompt-chart") {
+      setPromptValue("");
+      setPrompt({ kind: "chart", ...pos });
+    } else if (cmd.run.startsWith("chart:")) {
+      chartFromTable(cmd.run.slice(6) as ChartType);
     } else if (cmd.run === "continue") {
       void runContinue();
     } else if (cmd.run.startsWith("note:")) {
@@ -413,6 +490,28 @@ export function EditorAiCommands({
         const body = await res.json().catch(() => ({}));
         if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
         else editor.chain().focus().insertContentAt({ from, to }, body.text ?? "").run();
+      } else if (prompt.kind === "chart") {
+        const res = await fetch("/api/ai/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "write",
+            prompt:
+              `Create a chart specification for: ${value}.\n` +
+              'Return ONLY JSON in exactly this shape and nothing else: {"type":"bar"|"line"|"pie","title":string,"labels":string[],"series":[{"name":string,"data":number[]}]}.\n' +
+              'Use the exact numbers if I gave any; otherwise invent plausible sample values and end the title with " (sample data)". ' +
+              'Pick the chart type that fits ("bar" if unsure). Every series needs one number per label.',
+            text: "",
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error ?? "The AI tool is unavailable.");
+        } else {
+          const spec = parseChartSpec(String(body.text ?? "").replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
+          if (spec) appendMarkdown("```" + CHART_LANG + "\n" + serializeChartSpec(spec) + "\n```");
+          else setError("The AI didn't return a usable chart. Try describing the data differently.");
+        }
       } else if (prompt.kind === "table") {
         const res = await fetch("/api/ai/compose", {
           method: "POST",
@@ -464,7 +563,22 @@ export function EditorAiCommands({
     { icon: Trash2, title: "Delete table", danger: true, act: () => editor.chain().focus().deleteTable().run() },
   ];
 
-  const promptPlaceholder = prompt?.kind === "ask" ? "Ask about this project's documents…" : prompt?.kind === "custom" ? "How should AI change the selection?" : "Describe what to write…";
+  const promptPlaceholder =
+    prompt?.kind === "ask"
+      ? "Ask about this project's documents…"
+      : prompt?.kind === "custom"
+        ? "How should AI change the selection?"
+        : prompt?.kind === "table"
+          ? "What should the table contain?"
+          : prompt?.kind === "chart"
+            ? "Describe the chart, e.g. monthly signups in 2026 as a line chart"
+            : "Describe what to write…";
+
+  const chartButtons: { icon: typeof Sparkles; title: string; type: ChartType }[] = [
+    { icon: ChartColumn, title: "Bar chart from this table", type: "bar" },
+    { icon: ChartLine, title: "Line chart from this table", type: "line" },
+    { icon: ChartPie, title: "Pie chart from this table", type: "pie" },
+  ];
 
   return (
     <>
@@ -480,6 +594,20 @@ export function EditorAiCommands({
               onMouseDown={(e) => e.preventDefault()}
               onClick={b.act}
               className={b.danger ? TB_DANGER : TB}
+            >
+              <b.icon size={15} />
+            </button>
+          ))}
+          <span className="mx-0.5 h-5 w-px bg-zinc-200 dark:bg-zinc-700" />
+          {chartButtons.map((b) => (
+            <button
+              key={b.type}
+              type="button"
+              title={b.title}
+              aria-label={b.title}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => chartFromTable(b.type)}
+              className={`${TB} text-orange-500 hover:text-orange-600`}
             >
               <b.icon size={15} />
             </button>
