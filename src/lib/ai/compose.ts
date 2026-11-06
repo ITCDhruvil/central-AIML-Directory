@@ -15,7 +15,7 @@ Choose the format that fits what was asked, and use only what helps the reader. 
 - Data with several attributes or a comparison: a Markdown table.
 - A longer document (a plan, notes, a spec): short headings, with paragraphs and lists under them. Use "##" for sections.
 - One important warning, tip or note the reader must not miss: a callout, written as a block quote whose first line is "[!INFO]", "[!TIP]", "[!WARNING]" or "[!DANGER]". Use at most one or two, and only when it really is important.
-- A process, flow or relationships between parts, and only when a diagram was asked for or clearly helps: a \`\`\`mermaid code block.
+- A request that mentions a flow, flowchart, diagram, sequence, workflow, lifecycle, states, architecture or how something moves between parts: a \`\`\`mermaid code block (valid Mermaid; "graph TD" for flows, "sequenceDiagram" for interactions between actors, short node text, labels with spaces wrapped in [square brackets]), optionally followed by one short sentence. Do not use a diagram for anything else.
 - Bold only for a genuinely key term. Never decorate for its own sake.
 - Do not add a title, a table of contents, a summary, a "[TOC]" line, emojis or a closing offer unless asked.
 - Match the language, tone and formatting style of the existing note when one is given. Continue its style; do not switch to a different one.

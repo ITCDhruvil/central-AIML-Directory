@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CalendarRange, Check, ChevronLeft, ChevronRight, ClipboardList, ListChecks, Sparkles, WandSparkles, X } from "lucide-react";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { EDITOR_HINT as HINT, RichTextEditor } from "@/components/ui/RichTextEditor";
 import { MarkdownView } from "@/components/MarkdownView";
 import { Button } from "@/components/ui/Button";
 import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
@@ -308,7 +308,7 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
             value={content}
             onChange={setContent}
             projectId={projectId}
-            placeholder={`Type / for commands, or note what happened on ${dayLabel(selected)}…`}
+            placeholder={`What did you work on? ${HINT}`}
             className="min-h-[18rem]"
           />
         ) : content.trim() ? (

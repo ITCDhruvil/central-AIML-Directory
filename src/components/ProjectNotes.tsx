@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Check, ClipboardList, ListChecks, Sparkles, StickyNote, WandSparkles } from "lucide-react";
 import { MarkdownView } from "@/components/MarkdownView";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { EDITOR_HINT as HINT, RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Loader } from "@/components/prompt-kit/loader";
 import { TextShimmer } from "@/components/prompt-kit/text-shimmer";
 import { EmptyState } from "@/components/EmptyState";
@@ -164,7 +164,7 @@ export function ProjectNotes({
       )}
       {aiError && <p className="text-sm text-amber-600 dark:text-amber-400">{aiError}</p>}
 
-      <RichTextEditor value={content} onChange={setContent} projectId={projectId} placeholder="Type / for commands, or jot down meeting notes, decisions, to-dos…" className="min-h-[28rem]" />
+      <RichTextEditor value={content} onChange={setContent} projectId={projectId} placeholder={`Meeting notes, decisions, to-dos… ${HINT}`} className="min-h-[28rem]" />
       <p className="text-xs text-zinc-400">Notes save automatically. Everyone who can edit this project shares this notepad.</p>
     </div>
   );

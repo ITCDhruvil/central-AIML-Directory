@@ -22,7 +22,7 @@ import { Loader } from "@/components/prompt-kit/loader";
 import { Dropdown } from "@/components/ui/Dropdown";
 import { cleanTitle } from "@/lib/ai/cleanTitle";
 import { Button } from "@/components/ui/Button";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { EDITOR_HINT as HINT, RichTextEditor } from "@/components/ui/RichTextEditor";
 
 const CATEGORY_ICONS: Record<DocumentCategory, LucideIcon> = {
   README: FileText,
@@ -185,7 +185,7 @@ export function DocumentForm({
 
       <div>
         <span className={`${LABEL} mb-1.5`}>Content</span>
-        <RichTextEditor value={content} onChange={setContent} projectId={projectId} placeholder="Type / for commands, or write the document…" className="min-h-[28rem]" />
+        <RichTextEditor value={content} onChange={setContent} projectId={projectId} placeholder={`Start writing the document… ${HINT}`} className="min-h-[28rem]" />
         {errors.content && <p className="mt-1 text-xs text-red-600">{errors.content}</p>}
       </div>
 

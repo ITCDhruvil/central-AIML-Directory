@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCan } from "@/components/AuthProvider";
 import { MarkdownView } from "@/components/MarkdownView";
 import { Button } from "@/components/ui/Button";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { EDITOR_HINT as HINT, RichTextEditor } from "@/components/ui/RichTextEditor";
 import { saveProjectFields } from "@/lib/saveProjectFields";
 import type { Project } from "@/types/project";
 
@@ -55,7 +55,7 @@ export function InlineEditableDescription({ project }: { project: Project }) {
           value={value}
           onChange={setValue}
           projectId={project.id}
-          placeholder="Type / for commands, or describe the project"
+          placeholder={`Describe the project… ${HINT}`}
           className="min-h-[16rem]"
         />
         {error && <p className="mt-2 text-xs text-red-600">{error}</p>}

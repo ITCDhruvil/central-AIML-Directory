@@ -85,6 +85,9 @@ import {
   type TextTransformTone,
 } from "@/lib/ai/textTransformPrompts";
 
+/** The shortcuts shown in an empty editor, so they can be found without a manual. */
+export const EDITOR_HINT = "Space for AI · / for commands · @ to mention";
+
 /** Matches MarkdownView's rendered look (src/components/MarkdownView.tsx) so what you type looks like what gets shown elsewhere. */
 const EDITOR_CLASSES = [
   "min-h-24 px-3 sm:pl-[4.5rem] py-2 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:text-zinc-100",
@@ -1054,7 +1057,7 @@ export function RichTextEditor({
             ? `Heading ${node.attrs.level}`
             : ed.state.doc.childCount === 1 && ed.state.doc.firstChild?.content.size === 0 && placeholder
               ? placeholder
-              : "Press 'space' for AI or '/' for commands",
+              : EDITOR_HINT,
       }),
       Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true }),
     ],
