@@ -303,7 +303,7 @@ export function BlockHandle({ editor }: { editor: Editor }) {
           className="fixed z-50 flex w-64 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-2xl dark:border-zinc-700 dark:bg-zinc-900"
         >
           <div className="p-2">
-            <div className="flex items-center gap-2 rounded-lg border-2 border-blue-500/70 px-2 py-1.5">
+            <div className="flex items-center gap-2 rounded-lg border-2 border-orange-500/70 px-2 py-1.5">
               <Search size={14} className="text-zinc-400" />
               <input
                 ref={searchRef}
@@ -338,7 +338,7 @@ export function BlockHandle({ editor }: { editor: Editor }) {
                       <i.icon size={15} className={i.danger ? "" : "text-zinc-500 dark:text-zinc-400"} />
                       <span className="flex-1">{i.label}</span>
                       {i.toggle && (
-                        <span className={cn("flex h-4 w-7 items-center rounded-full p-0.5 transition-colors", i.on ? "bg-blue-500" : "bg-zinc-300 dark:bg-zinc-600")}>
+                        <span className={cn("flex h-4 w-7 items-center rounded-full p-0.5 transition-colors", i.on ? "bg-orange-500" : "bg-zinc-300 dark:bg-zinc-600")}>
                           <span className={cn("h-3 w-3 rounded-full bg-white transition-transform", i.on && "translate-x-3")} />
                         </span>
                       )}

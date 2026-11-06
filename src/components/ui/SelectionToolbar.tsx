@@ -293,7 +293,7 @@ export function SelectionToolbar({ editor, onBusy }: { editor: Editor; onBusy: (
           <div className="mt-1.5 w-full rounded-xl border border-zinc-200 bg-white p-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
             {mode === "prompt" ? (
               <div className="flex items-center gap-2 px-1.5 py-1">
-                <PencilLine size={15} className="shrink-0 text-orange-500" />
+                <PencilLine size={15} className="shrink-0 text-zinc-500 dark:text-zinc-400" />
                 <input
                   ref={promptInput}
                   value={promptValue}
@@ -368,7 +368,7 @@ function MenuRow({ icon: Icon, label, onClick, accent, disabled }: { icon: Lucid
         accent ? "font-medium text-orange-600 dark:text-orange-400" : "text-zinc-700 dark:text-zinc-200",
       )}
     >
-      <Icon size={15} className={accent ? "" : "text-orange-500"} />
+      <Icon size={15} className={accent ? "" : "text-zinc-500 dark:text-zinc-400"} />
       {label}
     </button>
   );

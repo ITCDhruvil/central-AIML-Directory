@@ -536,6 +536,6 @@ input.autofill-clean:-webkit-autofill:focus {
 /* A selected block: a light tint with some breathing room around the text (the shadow adds the padding without moving anything). */
 .ProseMirror .ProseMirror-selectednode:not([data-node-view-wrapper]) {
   border-radius: 2px;
-  background: rgb(59 130 246 / 0.1);
-  box-shadow: 0 0 0 0.5rem rgb(59 130 246 / 0.1);
+  background: rgb(249 115 22 / 0.1);
+  box-shadow: 0 0 0 0.5rem rgb(249 115 22 / 0.1);
 }

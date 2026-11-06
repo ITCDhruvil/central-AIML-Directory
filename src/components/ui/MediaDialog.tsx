@@ -145,7 +145,7 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
               onClick={() => switchKind(k.kind)}
               className={cn(
                 "flex items-center justify-center gap-1.5 rounded-lg py-1.5 text-sm font-medium transition-colors",
-                kind === k.kind ? "bg-white text-orange-600 shadow-sm dark:bg-zinc-900 dark:text-orange-400" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
+                kind === k.kind ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200",
               )}
             >
               <k.icon size={14} />
@@ -165,7 +165,7 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
               }}
               className={cn(
                 "-mb-px flex items-center gap-1.5 border-b-2 pb-2",
-                mode === m ? "border-orange-500 text-orange-600 dark:text-orange-400" : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
+                mode === m ? "border-orange-500 text-zinc-900 dark:text-zinc-100" : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200",
               )}
             >
               <Icon size={14} />
@@ -226,7 +226,7 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
                 dragging ? "border-orange-400 bg-orange-50 dark:bg-orange-500/10" : "border-zinc-300 dark:border-zinc-700",
               )}
             >
-              <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-orange-50 text-orange-500 dark:bg-orange-500/10">
+              <span className="mb-2 flex h-11 w-11 items-center justify-center rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
                 <meta.icon size={20} />
               </span>
               <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">Drop {kind === "image" ? "an image" : `a ${kind} file`} here</p>
