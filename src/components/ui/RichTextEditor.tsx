@@ -106,13 +106,12 @@ const EDITOR_CLASSES = [
   "[&_.selectedCell]:bg-orange-500/10",
   "[&_.column-resize-handle]:absolute [&_.column-resize-handle]:top-0 [&_.column-resize-handle]:right-[-3px] [&_.column-resize-handle]:bottom-0 [&_.column-resize-handle]:z-10 [&_.column-resize-handle]:w-[3px] [&_.column-resize-handle]:rounded-full [&_.column-resize-handle]:bg-orange-500",
   "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md",
-  "[&_img.ProseMirror-selectednode]:outline [&_img.ProseMirror-selectednode]:outline-2 [&_img.ProseMirror-selectednode]:outline-orange-500",
   "[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0",
   "[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2",
   "[&_ul[data-type=taskList]_li>label]:mt-1 [&_ul[data-type=taskList]_li>div]:flex-1",
   "[&_sub]:align-sub [&_sub]:text-[0.75em] [&_sup]:align-super [&_sup]:text-[0.75em]",
   "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-zinc-400 [&_.is-empty::before]:content-[attr(data-placeholder)] dark:[&_.is-empty::before]:text-zinc-500",
-  "[&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:rounded-md [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:bg-blue-500/10 [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline-2 [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:outline-blue-500/40",
+  "[&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:rounded-md [&_.ProseMirror-selectednode:not([data-node-view-wrapper])]:bg-blue-500/10",
 ].join(" ");
 
 const IS_MAC =
