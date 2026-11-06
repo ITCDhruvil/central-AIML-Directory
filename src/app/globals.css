@@ -834,6 +834,14 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
 .lt-ROMAN ol { list-style-type: upper-roman; }
 .lt-square ul { list-style-type: square; }
 .lt-circle ul { list-style-type: circle; }
+.lt-zero ol { list-style-type: decimal-leading-zero; }
+.lt-greek ol { list-style-type: lower-greek; }
+.lt-devanagari ol { list-style-type: devanagari; }
+.lt-dash ul { list-style-type: "3  "; }
+.lt-arrow ul { list-style-type: "92  "; }
+.lt-check ul { list-style-type: "¹3  "; }
+.lt-star ul { list-style-type: "°5  "; }
+.lt-diamond ul { list-style-type: "C6  "; }
 
 /* ---- Page breaks and footnotes ---- */
 .page-break { margin: 1.25rem 0; border-top: 2px dashed rgb(161 161 170 / 0.6); position: relative; height: 0; break-after: page; page-break-after: always; }

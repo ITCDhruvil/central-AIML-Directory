@@ -78,7 +78,7 @@ import { BlockHandle } from "@/components/ui/BlockHandle";
 import { BlockExtensions } from "@/components/ui/BlockExtensions";
 import { ColorTools } from "@/components/ui/ColorTools";
 import { StyledBulletList, StyledOrderedList } from "@/components/ui/ListStyles";
-import { type ListType } from "@/lib/blockFormat";
+import { BULLET_LIST_TYPES, ORDERED_LIST_TYPES, isOrderedListType, type ListType } from "@/lib/blockFormat";
 import { FontSizeControl, currentFontSize, stepFontSize } from "@/components/ui/FontSize";
 import { AlignShortcuts, AlignedHeading, AlignedParagraph, Highlight, TextColor, TextSize, ALIGNMENTS, LINE_HEIGHTS, MAX_INDENT, blockFormatAt, setBlockFormat, type Alignment } from "@/components/ui/ColorMarks";
 import { FindBar } from "@/components/ui/FindBar";
@@ -270,7 +270,7 @@ function SplitToolbarGroup({
       {open && (
         <div
           role="menu"
-          className="absolute left-0 top-full z-30 mt-1 min-w-[15rem] overflow-hidden rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
+          className="absolute left-0 top-full z-30 mt-1 max-h-[min(26rem,70vh)] min-w-[15rem] overflow-y-auto rounded-lg border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-700 dark:bg-zinc-900"
         >
           {children}
         </div>
@@ -407,10 +407,31 @@ function FormatTextMenu({ editor }: { editor: Editor }) {
   );
 }
 
-const LIST_STYLE_LABEL: Record<ListType, string> = { alpha: "a. b. c.", ALPHA: "A. B. C.", roman: "i. ii. iii.", ROMAN: "I. II. III.", square: "Square bullets", circle: "Circle bullets" };
+const LIST_STYLE_LABEL: Record<ListType, string> = {
+  alpha: "a. b. c.",
+  ALPHA: "A. B. C.",
+  roman: "i. ii. iii.",
+  ROMAN: "I. II. III.",
+  zero: "01. 02. 03.",
+  greek: "α. β. γ.",
+  devanagari: "१. २. ३.",
+  square: "Square bullets",
+  circle: "Circle bullets",
+  dash: "Dash bullets",
+  arrow: "Arrow bullets",
+  check: "Check marks",
+  star: "Star bullets",
+  diamond: "Diamond bullets",
+};
 
-function setListStyle(editor: Editor, type: ListType | null) {
-  const name = editor.isActive("orderedList") ? "orderedList" : "bulletList";
+/** Applies a list style, turning the current line into that kind of list first if it isn't one. */
+function applyListStyle(editor: Editor, type: ListType | null) {
+  const wantsOrdered = type === null ? editor.isActive("orderedList") : isOrderedListType(type);
+  const name = wantsOrdered ? "orderedList" : "bulletList";
+  if (type !== null && !editor.isActive(name)) {
+    const chain = editor.chain().focus();
+    (wantsOrdered ? chain.toggleOrderedList() : chain.toggleBulletList()).run();
+  }
   editor.chain().focus().updateAttributes(name, { listType: type }).run();
 }
 
@@ -446,15 +467,16 @@ function ListsMenu({ editor }: { editor: Editor }) {
         active={editor.isActive("taskList")}
         onClick={() => run(() => editor.chain().focus().toggleTaskList().run())}
       />
-          {(editor.isActive("orderedList") || editor.isActive("bulletList")) && (
-        <>
           <div className="my-1 border-t border-zinc-100 dark:border-zinc-800" />
-          {(editor.isActive("orderedList") ? (["alpha", "ALPHA", "roman", "ROMAN"] as ListType[]) : (["square", "circle"] as ListType[])).concat([]).map((t) => (
-            <MenuItemWithShortcut key={t} icon={editor.isActive("orderedList") ? ListOrdered : List} label={LIST_STYLE_LABEL[t]} active={editor.getAttributes(editor.isActive("orderedList") ? "orderedList" : "bulletList").listType === t} onClick={() => run(() => setListStyle(editor, t))} />
-          ))}
-          <MenuItemWithShortcut icon={editor.isActive("orderedList") ? ListOrdered : List} label="Default style" active={!editor.getAttributes(editor.isActive("orderedList") ? "orderedList" : "bulletList").listType} onClick={() => run(() => setListStyle(editor, null))} />
-        </>
-      )}
+      <p className="px-3 pb-0.5 pt-1 text-[11px] font-medium text-zinc-400">Numbered styles</p>
+      {([...ORDERED_LIST_TYPES] as ListType[]).map((t) => (
+        <MenuItemWithShortcut key={t} icon={ListOrdered} label={LIST_STYLE_LABEL[t]} active={editor.isActive("orderedList") && editor.getAttributes("orderedList").listType === t} onClick={() => run(() => applyListStyle(editor, t))} />
+      ))}
+      <p className="px-3 pb-0.5 pt-1 text-[11px] font-medium text-zinc-400">Bullet styles</p>
+      {([...BULLET_LIST_TYPES] as ListType[]).map((t) => (
+        <MenuItemWithShortcut key={t} icon={List} label={LIST_STYLE_LABEL[t]} active={editor.isActive("bulletList") && editor.getAttributes("bulletList").listType === t} onClick={() => run(() => applyListStyle(editor, t))} />
+      ))}
+      {listActive && <MenuItemWithShortcut icon={RemoveFormatting} label="Default style" onClick={() => run(() => applyListStyle(editor, null))} />}
       {editor.isActive("orderedList") && (
         <MenuItemWithShortcut
           icon={ListOrdered}

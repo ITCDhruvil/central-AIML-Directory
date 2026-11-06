@@ -15,15 +15,33 @@ export type BlockFormat = { align?: Exclude<Alignment, "left">; dir?: "rtl"; lin
 
 export const isVariant = (v: unknown): v is Variant => typeof v === "string" && (VARIANTS as readonly string[]).includes(v);
 
-/** List styles beyond the default 1. 2. 3. and round bullets: letters, roman numerals, square and circle bullets. */
-export const LIST_TYPES = ["alpha", "ALPHA", "roman", "ROMAN", "square", "circle"] as const;
+/** List styles beyond the default 1. 2. 3. and round bullets. */
+export const ORDERED_LIST_TYPES = ["alpha", "ALPHA", "roman", "ROMAN", "zero", "greek", "devanagari"] as const;
+export const BULLET_LIST_TYPES = ["square", "circle", "dash", "arrow", "check", "star", "diamond"] as const;
+export const LIST_TYPES = [...ORDERED_LIST_TYPES, ...BULLET_LIST_TYPES] as const;
 export type ListType = (typeof LIST_TYPES)[number];
 export const isListType = (v: unknown): v is ListType => typeof v === "string" && (LIST_TYPES as readonly string[]).includes(v);
-export const LIST_CSS: Record<ListType, string> = { alpha: "lower-alpha", ALPHA: "upper-alpha", roman: "lower-roman", ROMAN: "upper-roman", square: "square", circle: "circle" };
+export const isOrderedListType = (v: unknown): boolean => typeof v === "string" && (ORDERED_LIST_TYPES as readonly string[]).includes(v);
+export const LIST_CSS: Record<ListType, string> = {
+  alpha: "lower-alpha",
+  ALPHA: "upper-alpha",
+  roman: "lower-roman",
+  ROMAN: "upper-roman",
+  zero: "decimal-leading-zero",
+  greek: "lower-greek",
+  devanagari: "devanagari",
+  square: "square",
+  circle: "circle",
+  dash: '"–  "',
+  arrow: '"→  "',
+  check: '"✓  "',
+  star: '"★  "',
+  diamond: '"◆  "',
+};
 
 /** The wrapper around a list that has a non-default style. */
 export const listOpenTag = (type: ListType) => `<div data-lt="${type}">`;
-const LIST_OPEN = /^<div data-lt="(alpha|ALPHA|roman|ROMAN|square|circle)">$/;
+const LIST_OPEN = new RegExp(`^<div data-lt="(${LIST_TYPES.join("|")})">$`);
 export function parseListTag(tag: string): ListType | null {
   const m = LIST_OPEN.exec(tag.trim());
   return m ? (m[1] as ListType) : null;
