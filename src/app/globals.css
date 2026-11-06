@@ -479,3 +479,9 @@ input.autofill-clean:-webkit-autofill:focus {
 .chart-actions button:hover {
   color: #f97316;
 }
+
+/* Table column borders (prosemirror-tables adds .resize-cursor while the pointer is on a border): show the drag cursor. */
+.ProseMirror.resize-cursor,
+.ProseMirror.resize-cursor * {
+  cursor: col-resize !important;
+}

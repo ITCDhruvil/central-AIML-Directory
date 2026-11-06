@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  ArrowDownAZ,
+  ArrowUpAZ,
+  ChevronUp,
+  Copy,
+  Download,
+  MoveHorizontal,
+  ArrowLeftRight,
   ChartColumn,
   ChevronDown,
   ChartLine,
@@ -34,6 +41,7 @@ import {
 } from "lucide-react";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
+import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
 import { cn } from "@/lib/cn";
@@ -562,6 +570,18 @@ export function EditorAiCommands({
         { icon: ArrowLeft, label: "Insert column left", act: () => editor.chain().focus().addColumnBefore().run() },
         { icon: ArrowRight, label: "Insert column right", act: () => editor.chain().focus().addColumnAfter().run() },
         { icon: Columns3, label: "Delete column", danger: true, act: () => editor.chain().focus().deleteColumn().run() },
+        { icon: MoveHorizontal, label: "Fit columns to content", act: () => fitAllColumns(editor, "content") },
+        { icon: ArrowLeftRight, label: "Make columns even", act: () => fitAllColumns(editor, "even") },
+      ],
+    },
+    {
+      title: "Arrange",
+      items: [
+        { icon: ChevronUp, label: "Move row up", act: () => moveRow(editor, -1) },
+        { icon: ChevronDown, label: "Move row down", act: () => moveRow(editor, 1) },
+        { icon: Copy, label: "Duplicate row", act: () => duplicateRow(editor) },
+        { icon: ArrowDownAZ, label: "Sort column A \u2192 Z", act: () => sortByColumn(editor, 1) },
+        { icon: ArrowUpAZ, label: "Sort column Z \u2192 A", act: () => sortByColumn(editor, -1) },
       ],
     },
     {
@@ -580,7 +600,13 @@ export function EditorAiCommands({
         { icon: ChartPie, label: "Pie chart", closes: true, act: () => chartFromTable("pie") },
       ],
     },
-    { title: "", items: [{ icon: Trash2, label: "Delete table", danger: true, closes: true, act: () => editor.chain().focus().deleteTable().run() }] },
+    {
+      title: "Table",
+      items: [
+        { icon: Download, label: "Export as CSV", act: () => exportCsv(editor) },
+        { icon: Trash2, label: "Delete table", danger: true, closes: true, act: () => editor.chain().focus().deleteTable().run() },
+      ],
+    },
   ];
 
   const promptPlaceholder =
@@ -605,7 +631,7 @@ export function EditorAiCommands({
             className={cn(
               "inline-flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-xs font-medium shadow-lg transition-colors",
               tableMenuOpen
-                ? "border-orange-300 bg-orange-50 text-orange-600 dark:border-orange-500/40 dark:bg-orange-500/10 dark:text-orange-400"
+                ? "border-orange-300 bg-white text-orange-600 dark:border-orange-500/50 dark:bg-zinc-900 dark:text-orange-400"
                 : "border-zinc-200 bg-white text-zinc-700 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200",
             )}
           >

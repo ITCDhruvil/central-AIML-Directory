@@ -64,6 +64,7 @@ import { EditorAiCommands } from "@/components/ui/EditorAiCommands";
 import { SelectionToolbar } from "@/components/ui/SelectionToolbar";
 import { GhostText } from "@/components/ui/GhostText";
 import { ChartPreview } from "@/components/ui/ChartPreview";
+import { TableAutoFit } from "@/components/ui/tableOps";
 import { useClickOutside } from "@/lib/useClickOutside";
 import {
   TEXT_TRANSFORM_LANGUAGES,
@@ -88,12 +89,16 @@ const EDITOR_CLASSES = [
   "[&_pre_code]:bg-transparent [&_pre_code]:p-0",
   "[&_blockquote]:my-2 [&_blockquote]:border-l-2 [&_blockquote]:border-zinc-300 [&_blockquote]:pl-3 [&_blockquote]:text-zinc-500 dark:[&_blockquote]:border-zinc-700",
   "[&_hr]:my-3 [&_hr]:border-zinc-200 dark:[&_hr]:border-zinc-800",
-  "[&_.tableWrapper]:my-2 [&_.tableWrapper]:overflow-x-auto",
-  "[&_table]:w-full [&_table]:border-collapse [&_table]:text-left",
-  "[&_th]:relative [&_th]:border [&_th]:border-zinc-300 [&_th]:bg-zinc-100 [&_th]:px-2 [&_th]:py-1 [&_th]:font-semibold dark:[&_th]:border-zinc-700 dark:[&_th]:bg-zinc-800",
-  "[&_td]:relative [&_td]:border [&_td]:border-zinc-300 [&_td]:px-2 [&_td]:py-1 dark:[&_td]:border-zinc-700",
+  // Tables: a soft rounded frame, light row lines, a tinted header, a hover row, and a visible column-drag handle.
+  "[&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-xl [&_.tableWrapper]:border [&_.tableWrapper]:border-zinc-200 dark:[&_.tableWrapper]:border-zinc-700/70",
+  "[&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:text-left [&_table]:text-sm",
+  "[&_th]:relative [&_th]:border-b [&_th]:border-zinc-200 [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-zinc-600 dark:[&_th]:border-zinc-700/70 dark:[&_th]:bg-zinc-800/60 dark:[&_th]:text-zinc-300",
+  "[&_td]:relative [&_td]:border-b [&_td]:border-zinc-100 [&_td]:px-3 [&_td]:py-2 dark:[&_td]:border-zinc-800",
+  "[&_th+th]:border-l [&_th+th]:border-l-zinc-100 [&_td+td]:border-l [&_td+td]:border-l-zinc-100 dark:[&_th+th]:border-l-zinc-800 dark:[&_td+td]:border-l-zinc-800",
+  "[&_tbody_tr:last-child_td]:border-b-0 [&_tbody_tr:hover_td]:bg-zinc-50/80 dark:[&_tbody_tr:hover_td]:bg-zinc-800/30",
+  "[&_td_p]:my-0 [&_th_p]:my-0",
   "[&_.selectedCell]:bg-orange-500/10",
-  "[&_.column-resize-handle]:absolute [&_.column-resize-handle]:top-0 [&_.column-resize-handle]:right-[-2px] [&_.column-resize-handle]:bottom-0 [&_.column-resize-handle]:w-1 [&_.column-resize-handle]:bg-orange-500",
+  "[&_.column-resize-handle]:absolute [&_.column-resize-handle]:top-0 [&_.column-resize-handle]:right-[-3px] [&_.column-resize-handle]:bottom-0 [&_.column-resize-handle]:z-10 [&_.column-resize-handle]:w-[3px] [&_.column-resize-handle]:rounded-full [&_.column-resize-handle]:bg-orange-500",
   "[&_img]:my-2 [&_img]:max-w-full [&_img]:rounded-md",
   "[&_img.ProseMirror-selectednode]:outline [&_img.ProseMirror-selectednode]:outline-2 [&_img.ProseMirror-selectednode]:outline-orange-500",
   "[&_ul[data-type=taskList]]:list-none [&_ul[data-type=taskList]]:pl-0",
@@ -854,6 +859,7 @@ export function RichTextEditor({
       ExtraKeyboardShortcuts,
       GhostText,
       ChartPreview,
+      TableAutoFit,
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
