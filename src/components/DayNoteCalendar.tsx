@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { CalendarRange, Check, ChevronLeft, ChevronRight, ClipboardList, Clock, ListChecks, Pin, PinOff, Plus, Sparkles, WandSparkles, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { CalendarDays, CalendarRange, Check, ChevronLeft, ChevronRight, ClipboardList, Clock, ListChecks, PanelLeftClose, PanelLeftOpen, Pin, PinOff, Plus, Sparkles, WandSparkles, X } from "lucide-react";
 import { EDITOR_HINT as HINT, RichTextEditor } from "@/components/ui/RichTextEditor";
 import { MarkdownView } from "@/components/MarkdownView";
 import { Button } from "@/components/ui/Button";
@@ -16,6 +16,33 @@ import { dayLabel, monthCells, monthLabel, monthOf, shiftMonth, todayDay, weekKe
 
 type SaveState = "idle" | "saving" | "saved" | "error";
 const WEEKDAY_HEADERS = ["S", "M", "T", "W", "T", "F", "S"];
+
+// Whether the calendar is folded away is remembered in this browser.
+const COLLAPSE_KEY = "notes-calendar-collapsed";
+const COLLAPSE_EVENT = "notes-calendar-collapse-change";
+function subscribeCollapsed(onChange: () => void) {
+  window.addEventListener(COLLAPSE_EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(COLLAPSE_EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
+}
+const readCollapsed = () => {
+  try {
+    return window.localStorage.getItem(COLLAPSE_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+function writeCollapsed(value: boolean) {
+  try {
+    window.localStorage.setItem(COLLAPSE_KEY, value ? "1" : "0");
+  } catch {
+    // storage blocked: the choice then lasts until the page is left
+  }
+  window.dispatchEvent(new Event(COLLAPSE_EVENT));
+}
 
 type PageSummary = { id: string; key: string; title: string; position: number; pinned: boolean; empty: boolean };
 type PinnedItem = { kind: "day"; day: string } | { kind: "page"; id: string; key: string; title: string };
@@ -50,6 +77,7 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
   const [pageId, setPageId] = useState<string | null>(null);
   const [pinned, setPinned] = useState<PinnedItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const collapsed = useSyncExternalStore(subscribeCollapsed, readCollapsed, () => false);
   const [nameDialog, setNameDialog] = useState<{ mode: "new" } | { mode: "rename"; page: PageSummary } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PageSummary | null>(null);
   const [pageBusy, setPageBusy] = useState(false);
@@ -306,16 +334,37 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
   const cells = monthCells(month);
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[20rem_minmax(0,1fr)]">
+    <div className={cn("grid grid-cols-1 gap-5", collapsed ? "lg:grid-cols-[3rem_minmax(0,1fr)]" : "lg:grid-cols-[20rem_minmax(0,1fr)]")}>
       {/* Calendar */}
+      {collapsed ? (
+        <div className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900 lg:flex-col lg:py-3">
+          <button
+            type="button"
+            onClick={() => writeCollapsed(false)}
+            aria-label="Show the calendar"
+            title="Show the calendar"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100"
+          >
+            <PanelLeftOpen size={18} />
+          </button>
+          <CalendarDays size={16} className="text-zinc-400" aria-hidden />
+          <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 lg:[text-orientation:mixed] lg:[writing-mode:vertical-rl]" suppressHydrationWarning>
+            {dayLabel(selected)}
+          </span>
+        </div>
+      ) : (
       <div className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-        <div className="flex items-center justify-between px-1 py-1">
+        <div className="flex items-center gap-1 px-1 py-1">
           <button type="button" aria-label="Previous month" onClick={() => setMonth(shiftMonth(month, -1))} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
             <ChevronLeft size={16} />
           </button>
-          <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{monthLabel(month)}</span>
+          <span className="flex-1 text-center text-sm font-semibold text-zinc-900 dark:text-zinc-100">{monthLabel(month)}</span>
           <button type="button" aria-label="Next month" onClick={() => setMonth(shiftMonth(month, 1))} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
             <ChevronRight size={16} />
+          </button>
+          <span className="mx-0.5 h-4 w-px bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+          <button type="button" aria-label="Hide the calendar" title="Hide the calendar" onClick={() => writeCollapsed(true)} className="rounded-md p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200">
+            <PanelLeftClose size={16} />
           </button>
         </div>
 
@@ -381,6 +430,7 @@ export function DayNoteCalendar({ apiBase, canEdit, canUseAi = false, projectId 
           </div>
         )}
       </div>
+      )}
 
       {/* Selected day */}
       <div className="min-w-0 space-y-2">
