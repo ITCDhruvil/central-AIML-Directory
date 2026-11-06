@@ -836,7 +836,7 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
 .lt-circle ul { list-style-type: circle; }
 .lt-zero ol { list-style-type: decimal-leading-zero; }
 .lt-greek ol { list-style-type: lower-greek; }
-.lt-devanagari ol { list-style-type: devanagari; }
+.lt-devanagari ol { list-style-type: hindi-digits; }
 .lt-dash ul { list-style-type: "–  "; }
 .lt-arrow ul { list-style-type: "→  "; }
 .lt-check ul { list-style-type: "✓  "; }
@@ -867,3 +867,10 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
 .fn-ref { font-size: 0.75em; vertical-align: super; color: #f97316; }
 .fn-definition { font-size: 0.8rem; color: rgb(113 113 122); border-top: 1px solid rgb(228 228 231); padding-top: 0.25rem; }
 .dark .fn-definition { border-top-color: rgb(63 63 70 / 0.7); }
+
+/* Hindi (Devanagari) digits for numbered lists, defined here so it works in every browser. */
+@counter-style hindi-digits {
+  system: numeric;
+  symbols: "\966" "\967" "\968" "\969" "\96A" "\96B" "\96C" "\96D" "\96E" "\96F";
+  suffix: ". ";
+}

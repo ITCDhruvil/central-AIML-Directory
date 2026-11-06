@@ -29,7 +29,7 @@ export const LIST_CSS: Record<ListType, string> = {
   ROMAN: "upper-roman",
   zero: "decimal-leading-zero",
   greek: "lower-greek",
-  devanagari: "devanagari",
+  devanagari: "hindi-digits",
   square: "square",
   circle: "circle",
   dash: '"–  "',
