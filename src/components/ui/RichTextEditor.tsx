@@ -65,6 +65,7 @@ import { SelectionToolbar } from "@/components/ui/SelectionToolbar";
 import { GhostText } from "@/components/ui/GhostText";
 import { ChartPreview } from "@/components/ui/ChartPreview";
 import { TableAutoFit } from "@/components/ui/tableOps";
+import { BlockHandle } from "@/components/ui/BlockHandle";
 import { Media } from "@/components/ui/MediaExtension";
 import { MediaDialog } from "@/components/ui/MediaDialog";
 import type { MediaKind } from "@/lib/media";
@@ -78,7 +79,7 @@ import {
 
 /** Matches MarkdownView's rendered look (src/components/MarkdownView.tsx) so what you type looks like what gets shown elsewhere. */
 const EDITOR_CLASSES = [
-  "min-h-24 px-3 py-2 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:text-zinc-100",
+  "min-h-24 px-3 sm:pl-[4.5rem] py-2 text-sm leading-relaxed text-zinc-900 focus:outline-none dark:text-zinc-100",
   "[&_h1]:mt-3 [&_h1]:mb-1.5 [&_h1]:text-lg [&_h1]:font-semibold",
   "[&_h2]:mt-3 [&_h2]:mb-1.5 [&_h2]:text-base [&_h2]:font-semibold",
   "[&_h3]:mt-2.5 [&_h3]:mb-1 [&_h3]:text-sm [&_h3]:font-semibold",
@@ -110,7 +111,8 @@ const EDITOR_CLASSES = [
   "[&_ul[data-type=taskList]_li]:flex [&_ul[data-type=taskList]_li]:items-start [&_ul[data-type=taskList]_li]:gap-2",
   "[&_ul[data-type=taskList]_li>label]:mt-1 [&_ul[data-type=taskList]_li>div]:flex-1",
   "[&_sub]:align-sub [&_sub]:text-[0.75em] [&_sup]:align-super [&_sup]:text-[0.75em]",
-  "[&_p.is-editor-empty:first-child::before]:pointer-events-none [&_p.is-editor-empty:first-child::before]:float-left [&_p.is-editor-empty:first-child::before]:h-0 [&_p.is-editor-empty:first-child::before]:text-zinc-400 [&_p.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]",
+  "[&_.is-empty::before]:pointer-events-none [&_.is-empty::before]:float-left [&_.is-empty::before]:h-0 [&_.is-empty::before]:text-zinc-400 [&_.is-empty::before]:content-[attr(data-placeholder)] dark:[&_.is-empty::before]:text-zinc-500",
+  "[&_.ProseMirror-selectednode]:rounded-md [&_.ProseMirror-selectednode]:bg-blue-500/10 [&_.ProseMirror-selectednode]:outline [&_.ProseMirror-selectednode]:outline-2 [&_.ProseMirror-selectednode]:outline-blue-500/40",
 ].join(" ");
 
 const IS_MAC =
@@ -850,7 +852,14 @@ export function RichTextEditor({
       Link.configure({ openOnClick: false, autolink: true }),
       TaskList,
       TaskItem.configure({ nested: true }),
-      Placeholder.configure({ placeholder: placeholder ?? "" }),
+      Placeholder.configure({
+        placeholder: ({ editor: ed, node }) =>
+          node.type.name === "heading"
+            ? `Heading ${node.attrs.level}`
+            : ed.state.doc.childCount === 1 && ed.state.doc.firstChild?.content.size === 0 && placeholder
+              ? placeholder
+              : "Press 'space' for AI or '/' for commands",
+      }),
       Markdown.configure({ html: false, transformCopiedText: true, transformPastedText: true }),
     ],
     content: value,
@@ -881,6 +890,7 @@ export function RichTextEditor({
     <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
       {editor && <Toolbar editor={editor} onBusy={setBusy} autocomplete={autocomplete} onToggleAutocomplete={() => setAutocomplete((v) => !v)} />}
       {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} autocomplete={autocomplete} />}
+      {editor && <BlockHandle editor={editor} />}
       {editor && <SelectionToolbar editor={editor} onBusy={setBusy} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <EditorContent

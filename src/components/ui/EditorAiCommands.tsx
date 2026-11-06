@@ -42,7 +42,8 @@ import {
   WandSparkles,
   X,
 } from "lucide-react";
-import type { Node as PMNode } from "@tiptap/pm/model";
+import { createNodeFromContent } from "@tiptap/core";
+import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
 import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
@@ -92,7 +93,7 @@ const TEMPLATES: Record<string, string> = {
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
 type Pos = { top: number; left: number };
-type Prompt = { kind: "write" | "ask" | "table" | "chart" } & Pos;
+type Prompt = { kind: "write" | "ask" | "table" | "chart" | "edit"; at?: { from: number; to: number } } & Pos;
 
 function caretPos(editor: Editor): Pos {
   const { from } = editor.state.selection;
@@ -129,6 +130,7 @@ export function EditorAiCommands({
   const [tableMenuOpen, setTableMenuOpen] = useState(false);
   const tableBox = useRef<HTMLDivElement>(null);
   const promptInput = useRef<HTMLInputElement>(null);
+  const promptBox = useRef<HTMLDivElement>(null);
   const highlightedItem = useRef<HTMLButtonElement>(null);
 
   const filtered = menu ? commands.filter((c) => c.label.toLowerCase().replace(/\s/g, "").includes(menu.query.toLowerCase())) : [];
@@ -449,6 +451,52 @@ export function EditorAiCommands({
     else void chartWithAi(table);
   }
 
+  // The prompt box closes on a click elsewhere (it is never left floating over the note).
+  useEffect(() => {
+    if (!prompt || running) return;
+    const onDown = (e: MouseEvent) => {
+      if (promptBox.current && !promptBox.current.contains(e.target as Node)) setPrompt(null);
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [prompt, running]);
+
+  // "Ask AI to edit" in the block menu opens the prompt box for that block.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onBlockAi = (e: Event) => {
+      const d = (e as CustomEvent<{ from: number; to: number; top: number; left: number }>).detail;
+      if (!d) return;
+      setPromptValue("");
+      setPrompt({ kind: "edit", at: { from: d.from, to: d.to }, top: d.top, left: d.left });
+    };
+    // Space on an empty line asks the AI to write there, like Notion.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== " " || e.ctrlKey || e.metaKey || e.altKey || e.isComposing) return;
+      const { selection } = editor.state;
+      const { $from } = selection;
+      if (!selection.empty || $from.depth !== 1 || $from.parent.type.name !== "paragraph" || $from.parent.content.size !== 0) return;
+      e.preventDefault();
+      setPromptValue("");
+      setPrompt({ kind: "write", at: { from: $from.before(1), to: $from.after(1) }, ...caretPos(editor) });
+    };
+    dom.addEventListener("block-ai", onBlockAi);
+    dom.addEventListener("keydown", onKey);
+    return () => {
+      dom.removeEventListener("block-ai", onBlockAi);
+      dom.removeEventListener("keydown", onKey);
+    };
+  }, [editor]);
+
+  /** Replaces a range of the document with Markdown (lists, headings and tables included). */
+  function replaceWithMarkdown(from: number, to: number, md: string) {
+    const parser = (editor.storage.markdown as unknown as { parser: { parse: (m: string) => string } }).parser;
+    const content = createNodeFromContent(parser.parse(md.trim()), editor.schema);
+    const tr = editor.state.tr.replaceRange(from, to, new Slice(Fragment.from(content), 0, 0));
+    editor.view.dispatch(tr.scrollIntoView());
+    editor.commands.focus();
+  }
+
   // The chart's "Update from table" button asks for the table right above it to be charted again.
   useEffect(() => {
     const dom = editor.view.dom;
@@ -613,6 +661,21 @@ export function EditorAiCommands({
           if (spec) appendMarkdown("```" + CHART_LANG + "\n" + serializeChartSpec(spec) + "\n```");
           else setError("The AI didn't return a usable chart. Try describing the data differently.");
         }
+      } else if (prompt.kind === "edit" && prompt.at) {
+        const node = editor.state.doc.nodeAt(prompt.at.from);
+        const serializer = (editor.storage.markdown as unknown as { serializer: { serialize: (n: PMNode) => string } }).serializer;
+        const md = node ? serializer.serialize(editor.schema.topNodeType.create(null, node)) : "";
+        const res = await fetch("/api/ai/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "custom", prompt: value, text: md }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error ?? "The AI tool is unavailable.");
+          return;
+        }
+        replaceWithMarkdown(prompt.at.from, prompt.at.to, String(body.text ?? ""));
       } else if (prompt.kind === "table") {
         const res = await fetch("/api/ai/compose", {
           method: "POST",
@@ -630,6 +693,7 @@ export function EditorAiCommands({
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) setError(body.error ?? "The AI tool is unavailable.");
+        else if (prompt.kind === "write" && prompt.at) replaceWithMarkdown(prompt.at.from, prompt.at.to, String(body.text ?? ""));
         else appendMarkdown(body.text ?? "");
       }
       setPrompt(null);
@@ -700,7 +764,11 @@ export function EditorAiCommands({
   const promptPlaceholder =
     prompt?.kind === "ask"
       ? "Ask about this project's documents…"
-      : prompt?.kind === "table"
+      : prompt?.kind === "edit"
+        ? "Edit with AI — e.g. make it shorter, add a row, translate"
+        : prompt?.at
+          ? "Ask AI to write anything…"
+          : prompt?.kind === "table"
         ? "What should the table contain?"
         : prompt?.kind === "chart"
           ? "Describe the chart, e.g. monthly signups in 2026 as a line chart"
@@ -785,7 +853,7 @@ export function EditorAiCommands({
 
       {/* Prompt box for write / ask / custom */}
       {prompt && (
-        <div style={{ top: prompt.top, left: prompt.left }} className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-orange-300 bg-white p-2 shadow-xl dark:border-orange-500/40 dark:bg-zinc-900">
+        <div ref={promptBox} style={{ top: prompt.top, left: prompt.left }} className="fixed z-50 w-96 max-w-[calc(100vw-2rem)] rounded-lg border border-orange-300 bg-white p-2 shadow-xl dark:border-orange-500/40 dark:bg-zinc-900">
           <div className="flex items-center gap-2">
             <Sparkles size={15} className="shrink-0 text-orange-500" />
             <input
@@ -796,8 +864,10 @@ export function EditorAiCommands({
                 if (e.key === "Enter") {
                   e.preventDefault();
                   void submitPrompt();
-                } else if (e.key === "Escape") {
+                } else if (e.key === "Escape" || (e.key === "Backspace" && promptValue === "")) {
+                  e.preventDefault();
                   setPrompt(null);
+                  editor.commands.focus();
                 }
               }}
               placeholder={promptPlaceholder}
