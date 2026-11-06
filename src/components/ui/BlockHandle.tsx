@@ -160,12 +160,13 @@ export function BlockHandle({ editor }: { editor: Editor }) {
     // Open below the block so the text stays visible; flip above when the space below is too small.
     const el = editor.view.nodeDOM(active.pos);
     const rect = el instanceof HTMLElement ? el.getBoundingClientRect() : { top: active.top, bottom: active.top + 24, left: active.left + 56 };
-    const below = window.innerHeight - rect.bottom - 14;
-    const above = rect.top - 14;
+    const below = window.innerHeight - rect.bottom - 24;
+    const above = rect.top - 24;
     const useBelow = below >= 260 || below >= above;
     const maxH = Math.max(180, Math.min(416, useBelow ? below : above));
     setMenu({
-      top: useBelow ? rect.bottom + 6 : Math.max(8, rect.top - 6 - maxH),
+      // 8px of the selection tint spills outside the block, so leave room beyond it.
+      top: useBelow ? rect.bottom + 18 : Math.max(8, rect.top - 18 - maxH),
       left: Math.max(8, Math.min(rect.left, window.innerWidth - 272)),
       maxH,
     });
