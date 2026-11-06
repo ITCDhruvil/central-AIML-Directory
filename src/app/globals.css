@@ -558,3 +558,112 @@ input.autofill-clean:-webkit-autofill:focus {
   from { opacity: 0; transform: translateY(3px); }
   to { opacity: 1; transform: none; }
 }
+
+/* ---- Callouts, toggles, embeds, table of contents, diagrams, find highlights ---- */
+.ProseMirror .callout {
+  position: relative;
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.9rem 0.6rem 2.6rem;
+  border: 1px solid;
+  border-radius: 0.5rem;
+}
+.ProseMirror .callout::before {
+  position: absolute;
+  left: 0.9rem;
+  top: 0.6rem;
+  line-height: 1.5;
+}
+.ProseMirror .callout > :first-child { margin-top: 0; }
+.ProseMirror .callout > :last-child { margin-bottom: 0; }
+.ProseMirror .callout-info { background: rgb(14 165 233 / 0.08); border-color: rgb(14 165 233 / 0.3); }
+.ProseMirror .callout-info::before { content: "\2139\FE0F"; }
+.ProseMirror .callout-tip { background: rgb(16 185 129 / 0.08); border-color: rgb(16 185 129 / 0.3); }
+.ProseMirror .callout-tip::before { content: "\1F4A1"; }
+.ProseMirror .callout-warning { background: rgb(245 158 11 / 0.1); border-color: rgb(245 158 11 / 0.35); }
+.ProseMirror .callout-warning::before { content: "\26A0\FE0F"; }
+.ProseMirror .callout-danger { background: rgb(239 68 68 / 0.08); border-color: rgb(239 68 68 / 0.3); }
+.ProseMirror .callout-danger::before { content: "\1F6D1"; }
+
+.ProseMirror .toggle {
+  margin: 0.5rem 0;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid rgb(228 228 231);
+  border-radius: 0.5rem;
+}
+.dark .ProseMirror .toggle { border-color: rgb(63 63 70 / 0.7); }
+.ProseMirror .toggle > p:first-child {
+  position: relative;
+  padding-left: 1.4rem;
+  font-weight: 600;
+  cursor: text;
+}
+.ProseMirror .toggle > p:first-child::before {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.25rem;
+  text-align: center;
+  color: rgb(113 113 122);
+  cursor: pointer;
+}
+.ProseMirror .toggle[data-open="true"] > p:first-child::before { content: "\25BE"; }
+.ProseMirror .toggle[data-open="false"] > p:first-child::before { content: "\25B8"; }
+.ProseMirror .toggle[data-open="false"] > :not(:first-child) { display: none; }
+
+.ProseMirror .embed-block {
+  margin: 0.75rem 0;
+  max-width: 40rem;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid rgb(228 228 231);
+  background: #000;
+}
+.dark .ProseMirror .embed-block { border-color: rgb(63 63 70 / 0.7); }
+.ProseMirror .embed-block iframe { width: 100%; height: 100%; border: 0; }
+.ProseMirror .embed-block.ProseMirror-selectednode { box-shadow: 0 0 0 0.5rem rgb(249 115 22 / 0.1); }
+
+.ProseMirror .toc-source { color: rgb(161 161 170); font-size: 0.7rem; margin-bottom: 0; }
+.ProseMirror .toc-preview {
+  margin: 0 0 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid rgb(228 228 231);
+  border-radius: 0.5rem;
+}
+.dark .ProseMirror .toc-preview { border-color: rgb(63 63 70 / 0.7); }
+.ProseMirror .toc-item {
+  display: block;
+  width: 100%;
+  padding: 0.15rem 0;
+  text-align: left;
+  font-size: 0.85rem;
+  color: rgb(82 82 91);
+}
+.dark .ProseMirror .toc-item { color: rgb(161 161 170); }
+.ProseMirror .toc-item:hover { color: #f97316; }
+.ProseMirror .toc-l2 { padding-left: 1rem; }
+.ProseMirror .toc-l3 { padding-left: 2rem; }
+.ProseMirror .toc-empty { margin: 0; font-size: 0.8rem; color: rgb(161 161 170); }
+
+.ProseMirror .mermaid-preview {
+  display: flex;
+  justify-content: center;
+  margin: 0.5rem 0 0.75rem;
+  overflow-x: auto;
+  color: rgb(82 82 91);
+}
+.ProseMirror .mermaid-preview svg { max-width: 100%; height: auto; }
+
+.ProseMirror .find-match { background: rgb(250 204 21 / 0.35); border-radius: 2px; }
+.ProseMirror .find-current { background: rgb(249 115 22 / 0.55); }
+
+/* Diagram block: the drawn diagram on top, its code hidden until Edit code is pressed. */
+.ProseMirror .mermaid-block {
+  margin: 0.5rem 0 0;
+  padding: 0.75rem;
+  border: 1px solid rgb(228 228 231);
+  border-radius: 0.5rem;
+}
+.dark .ProseMirror .mermaid-block { border-color: rgb(63 63 70 / 0.7); }
+.ProseMirror .mermaid-block .mermaid-preview { margin: 0; }
+.ProseMirror pre.mermaid-source { display: none; }
+.ProseMirror pre.mermaid-source-open { display: block; margin-top: 0.25rem; }

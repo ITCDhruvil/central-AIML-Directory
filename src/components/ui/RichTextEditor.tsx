@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
@@ -48,6 +48,9 @@ import {
   RemoveFormatting,
   Smile,
   Sparkles,
+  ListIndentIncrease,
+  ListIndentDecrease,
+  Search,
   SpellCheck2,
   Strikethrough,
   Subscript as SubscriptIcon,
@@ -66,6 +69,11 @@ import { GhostText } from "@/components/ui/GhostText";
 import { ChartPreview } from "@/components/ui/ChartPreview";
 import { TableAutoFit } from "@/components/ui/tableOps";
 import { BlockHandle } from "@/components/ui/BlockHandle";
+import { BlockExtensions } from "@/components/ui/BlockExtensions";
+import { FindBar } from "@/components/ui/FindBar";
+import { FindReplace } from "@/components/ui/FindReplace";
+import { MentionMenu } from "@/components/ui/MentionMenu";
+import { EditorStatusBar, MoreMenu, type MoreEntry } from "@/components/ui/EditorExtras";
 import { Media } from "@/components/ui/MediaExtension";
 import { MediaDialog } from "@/components/ui/MediaDialog";
 import type { MediaKind } from "@/lib/media";
@@ -712,6 +720,25 @@ function AiMenu({ editor, onBusy }: { editor: Editor; onBusy: (label: string | n
   );
 }
 
+type ToolGroup = "autocomplete" | "lists" | "headings" | "blocks" | "table" | "image" | "link" | "edit" | "history";
+
+// The order groups stay on the toolbar as it narrows: the toolbar is filled as far as it will go, and whatever is left
+// moves into the "..." menu instead of wrapping onto a second row.
+const TOOL_ORDER: ToolGroup[] = ["lists", "headings", "autocomplete", "link", "image", "table", "blocks", "edit", "history"];
+// Groups that have a divider in front of them when shown.
+const DIVIDED: ToolGroup[] = ["blocks", "edit", "history"];
+
+function promptLink(editor: Editor) {
+  const previousUrl = editor.getAttributes("link").href as string | undefined;
+  const url = window.prompt("Link URL", previousUrl ?? "");
+  if (url === null) return;
+  if (!url.trim()) {
+    editor.chain().focus().unsetLink().run();
+    return;
+  }
+  editor.chain().focus().setLink({ href: url.trim() }).run();
+}
+
 function Toolbar({
   editor,
   onBusy,
@@ -724,6 +751,13 @@ function Toolbar({
   onToggleAutocomplete: () => void;
 }) {
   const [mediaKind, setMediaKind] = useState<MediaKind | null>(null);
+  const [width, setWidth] = useState(1200);
+  // Real measured widths: of the always-shown parts, and of each optional group (measured in a hidden copy).
+  const [sizes, setSizes] = useState<{ fixed: number; groups: Partial<Record<ToolGroup, number>> } | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const aiRef = useRef<HTMLDivElement>(null);
+  const fmtRef = useRef<HTMLDivElement>(null);
+  const mirror = useRef<HTMLDivElement>(null);
   // The slash menu (/image, /video, /audio) asks the toolbar to open the same dialog.
   useEffect(() => {
     const dom = editor.view.dom;
@@ -732,10 +766,95 @@ function Toolbar({
     return () => dom.removeEventListener("open-media", open);
   }, [editor]);
 
-  return (
-    <div className="flex flex-wrap items-center gap-0.5 border-b border-zinc-200 bg-zinc-50 px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-950">
-      {mediaKind && <MediaDialog editor={editor} initialKind={mediaKind} onClose={() => setMediaKind(null)} />}
-      <AiMenu editor={editor} onBusy={onBusy} />
+  useEffect(() => {
+    const el = bar.current;
+    if (!el) return;
+    setWidth(el.getBoundingClientRect().width);
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  // Measure once the pieces are on screen (before paint), and again if the autocomplete button changes size.
+  useLayoutEffect(() => {
+    const groups: Partial<Record<ToolGroup, number>> = {};
+    mirror.current?.querySelectorAll<HTMLElement>("[data-group]").forEach((el) => {
+      groups[el.dataset.group as ToolGroup] = el.getBoundingClientRect().width;
+    });
+    // Always shown: the AI menu, the bold group, the "..." button (28) and the first divider (about 10).
+    const fixed = (aiRef.current?.getBoundingClientRect().width ?? 190) + (fmtRef.current?.getBoundingClientRect().width ?? 52) + 28 + 10;
+    setSizes({ fixed, groups });
+  }, [autocomplete]);
+
+  // Fill the toolbar as far as it goes, in priority order; the rest goes into the "..." menu.
+  const shown = new Set<ToolGroup>();
+  if (!sizes) TOOL_ORDER.forEach((g) => shown.add(g));
+  else {
+    let used = sizes.fixed + 12;
+    for (const g of TOOL_ORDER) {
+      const w = (sizes.groups[g] ?? 30) + 2 + (DIVIDED.includes(g) ? 10 : 0);
+      if (used + w > width) break;
+      used += w;
+      shown.add(g);
+    }
+  }
+  const inList = editor.isActive("listItem") || editor.isActive("taskItem");
+  const chain = () => editor.chain().focus();
+  const indent = () => editor.chain().focus().sinkListItem(editor.isActive("taskItem") ? "taskItem" : "listItem").run();
+  const outdent = () => editor.chain().focus().liftListItem(editor.isActive("taskItem") ? "taskItem" : "listItem").run();
+
+  const text: MoreEntry[] = [];
+  if (!shown.has("autocomplete")) text.push({ icon: Zap, label: `Autocomplete: ${autocomplete ? "on" : "off"}`, keep: true, run: onToggleAutocomplete });
+  if (!shown.has("lists")) {
+    text.push(
+      { icon: List, label: "Bulleted list", run: () => chain().toggleBulletList().run() },
+      { icon: ListOrdered, label: "Numbered list", run: () => chain().toggleOrderedList().run() },
+      { icon: ListChecks, label: "To-do list", run: () => chain().toggleTaskList().run() },
+    );
+  }
+  if (!shown.has("headings")) {
+    text.push(
+      { icon: Pilcrow, label: "Normal text", run: () => chain().setParagraph().run() },
+      { icon: Heading1, label: "Heading 1", run: () => chain().toggleHeading({ level: 1 }).run() },
+      { icon: Heading2, label: "Heading 2", run: () => chain().toggleHeading({ level: 2 }).run() },
+      { icon: Heading3, label: "Heading 3", run: () => chain().toggleHeading({ level: 3 }).run() },
+    );
+  }
+  const insert: MoreEntry[] = [];
+  if (!shown.has("blocks")) {
+    insert.push(
+      { icon: Quote, label: "Quote", run: () => chain().toggleBlockquote().run() },
+      { icon: Code, label: "Code block", run: () => chain().toggleCodeBlock().run() },
+      { icon: Minus, label: "Divider", run: () => chain().setHorizontalRule().run() },
+    );
+  }
+  if (!shown.has("table")) insert.push({ icon: Table2, label: "Insert table", run: () => chain().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run() });
+  if (!shown.has("image")) insert.push({ icon: ImageIcon, label: "Image, video or audio", run: () => setMediaKind("image") });
+  if (!shown.has("link")) insert.push({ icon: Link2, label: "Link", run: () => promptLink(editor) });
+  const edit: MoreEntry[] = [];
+  if (!shown.has("edit")) {
+    edit.push(
+      { icon: ListIndentIncrease, label: "Indent list item", run: () => void (inList && indent()) },
+      { icon: ListIndentDecrease, label: "Outdent list item", run: () => void (inList && outdent()) },
+      { icon: RemoveFormatting, label: "Clear formatting", run: () => chain().unsetAllMarks().clearNodes().run() },
+      { icon: Search, label: "Find and replace", run: () => editor.view.dom.dispatchEvent(new CustomEvent("open-find")) },
+    );
+  }
+  if (!shown.has("history")) {
+    edit.push(
+      { icon: Undo2, label: "Undo", run: () => chain().undo().run() },
+      { icon: Redo2, label: "Redo", run: () => chain().redo().run() },
+    );
+  }
+  const extra = [
+    { title: "Text", items: text },
+    { title: "Insert", items: insert },
+    { title: "Edit", items: edit },
+  ].filter((g) => g.items.length > 0);
+
+  // The optional groups, used both on the toolbar and in the hidden copy that is measured.
+  const groupNodes: Record<ToolGroup, React.ReactNode> = {
+    autocomplete: (
       <button
         type="button"
         onMouseDown={(e) => e.preventDefault()}
@@ -743,7 +862,7 @@ function Toolbar({
         title="AI autocomplete: suggests the rest as grey text; press Tab to accept"
         aria-pressed={autocomplete}
         className={cn(
-          "ml-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
+          "ml-1 inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-1 text-xs font-medium transition-colors",
           autocomplete
             ? "bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400"
             : "text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
@@ -752,55 +871,74 @@ function Toolbar({
         <Zap size={14} />
         Autocomplete
       </button>
+    ),
+    lists: <ListsMenu editor={editor} />,
+    headings: <HeadingsMenu editor={editor} />,
+    blocks: (
+      <>
+        <ToolbarButton label="Quote" icon={Quote} active={editor.isActive("blockquote")} onClick={() => editor.chain().focus().toggleBlockquote().run()} />
+        <ToolbarButton label="Code block" icon={Code} active={editor.isActive("codeBlock")} onClick={() => editor.chain().focus().toggleCodeBlock().run()} />
+        <ToolbarButton label="Divider" icon={Minus} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
+      </>
+    ),
+    table: <TableMenu editor={editor} />,
+    image: <ToolbarButton label="Image, video or audio" icon={ImageIcon} active={editor.isActive("image") || editor.isActive("media")} onClick={() => setMediaKind("image")} />,
+    link: <ToolbarButton label="Link" icon={Link2} active={editor.isActive("link")} onClick={() => promptLink(editor)} />,
+    edit: (
+      <>
+        <ToolbarButton label="Indent list item" icon={ListIndentIncrease} disabled={!inList} onClick={indent} />
+        <ToolbarButton label="Outdent list item" icon={ListIndentDecrease} disabled={!inList} onClick={outdent} />
+        <ToolbarButton label="Clear formatting" icon={RemoveFormatting} onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()} />
+        <ToolbarButton label="Find and replace (Ctrl F)" icon={Search} onClick={() => editor.view.dom.dispatchEvent(new CustomEvent("open-find"))} />
+      </>
+    ),
+    history: (
+      <>
+        <ToolbarButton label="Undo" icon={Undo2} disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
+        <ToolbarButton label="Redo" icon={Redo2} disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
+      </>
+    ),
+  };
+  const show = (g: ToolGroup, divider = false) =>
+    shown.has(g) ? (
+      <>
+        {divider && <ToolbarDivider />}
+        {groupNodes[g]}
+      </>
+    ) : null;
+
+  return (
+    <div ref={bar} className="relative z-20 flex flex-nowrap items-center gap-0.5 rounded-t-md border-b border-zinc-200 bg-zinc-50 px-1.5 py-1 dark:border-zinc-800 dark:bg-zinc-950">
+      {mediaKind && <MediaDialog editor={editor} initialKind={mediaKind} onClose={() => setMediaKind(null)} />}
+      <div ref={aiRef} className="shrink-0">
+        <AiMenu editor={editor} onBusy={onBusy} />
+      </div>
+      {show("autocomplete")}
 
       <ToolbarDivider />
 
-      <FormatTextMenu editor={editor} />
-      <ListsMenu editor={editor} />
-      <HeadingsMenu editor={editor} />
+      <div ref={fmtRef} className="flex shrink-0 items-center">
+        <FormatTextMenu editor={editor} />
+      </div>
+      {show("lists")}
+      {show("headings")}
 
-      <ToolbarDivider />
+      {show("blocks", true)}
+      {show("table")}
+      {show("image")}
+      {show("link")}
+      {show("edit", true)}
+      {show("history", true)}
+      <MoreMenu editor={editor} extra={extra} />
 
-      <ToolbarButton
-        label="Quote"
-        icon={Quote}
-        active={editor.isActive("blockquote")}
-        onClick={() => editor.chain().focus().toggleBlockquote().run()}
-      />
-      <ToolbarButton
-        label="Code block"
-        icon={Code}
-        active={editor.isActive("codeBlock")}
-        onClick={() => editor.chain().focus().toggleCodeBlock().run()}
-      />
-      <ToolbarButton label="Divider" icon={Minus} onClick={() => editor.chain().focus().setHorizontalRule().run()} />
-      <TableMenu editor={editor} />
-      <ToolbarButton
-        label="Image, video or audio"
-        icon={ImageIcon}
-        active={editor.isActive("image") || editor.isActive("media")}
-        onClick={() => setMediaKind("image")}
-      />
-      <ToolbarButton
-        label="Link"
-        icon={Link2}
-        active={editor.isActive("link")}
-        onClick={() => {
-          const previousUrl = editor.getAttributes("link").href as string | undefined;
-          const url = window.prompt("Link URL", previousUrl ?? "");
-          if (url === null) return;
-          if (!url.trim()) {
-            editor.chain().focus().unsetLink().run();
-            return;
-          }
-          editor.chain().focus().setLink({ href: url.trim() }).run();
-        }}
-      />
-
-      <ToolbarDivider />
-
-      <ToolbarButton label="Undo" icon={Undo2} disabled={!editor.can().undo()} onClick={() => editor.chain().focus().undo().run()} />
-      <ToolbarButton label="Redo" icon={Redo2} disabled={!editor.can().redo()} onClick={() => editor.chain().focus().redo().run()} />
+      {/* A hidden copy of every optional group, only so its real width can be measured. */}
+      <div ref={mirror} aria-hidden inert className="pointer-events-none invisible absolute left-0 top-0 flex items-center gap-0.5 whitespace-nowrap">
+        {TOOL_ORDER.map((g) => (
+          <div key={g} data-group={g} className="flex shrink-0 items-center">
+            {groupNodes[g]}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -903,6 +1041,8 @@ export function RichTextEditor({
       ExtraKeyboardShortcuts,
       GhostText,
       ChartPreview,
+      ...BlockExtensions,
+      FindReplace,
       Media,
       TableAutoFit,
       Link.configure({ openOnClick: false, autolink: true }),
@@ -943,10 +1083,11 @@ export function RichTextEditor({
   }, [busy, editor]);
 
   return (
-    <div className={cn("flex flex-col overflow-hidden rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
+    <div className={cn("flex flex-col rounded-md border border-zinc-300 dark:border-zinc-700", className)}>
       {editor && <Toolbar editor={editor} onBusy={setBusy} autocomplete={autocomplete} onToggleAutocomplete={() => setAutocomplete((v) => !v)} />}
       {editor && <EditorAiCommands editor={editor} projectId={projectId} onBusy={setBusy} autocomplete={autocomplete} />}
       {editor && <BlockHandle editor={editor} />}
+      {editor && <MentionMenu editor={editor} />}
       {editor && <SelectionToolbar editor={editor} onBusy={setBusy} />}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <EditorContent
@@ -958,8 +1099,10 @@ export function RichTextEditor({
             busy && "[&_.is-empty::before]:opacity-0",
           )}
         />
+        {editor && <FindBar editor={editor} />}
         {busy && editor && <AiWritingSkeleton editor={editor} label={busy.label} pos={busy.pos} />}
       </div>
+      {editor && <EditorStatusBar editor={editor} />}
     </div>
   );
 }

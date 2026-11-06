@@ -4,6 +4,9 @@ import { ChatTable } from "@/components/ChatTable";
 import { chartToSvg, CHART_LANG, parseChartSpec } from "@/lib/chartSpec";
 import { ImageFigure } from "@/components/ImageFigure";
 import { parseMediaAlt } from "@/lib/media";
+import { MermaidView } from "@/components/MermaidView";
+import { CALLOUT_META, headingId, markdownHeadings, parseAlertMarker, TOC_MARKER, type CalloutType } from "@/lib/alerts";
+import { embedSource, EMBED_ALT } from "@/lib/embed";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -42,30 +45,117 @@ const WRAPPER_CLASSES = [
 const CHAT_TABLE_CLASSES =
   "[&_td]:break-words [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-left [&_th]:text-xs [&_th]:font-semibold [&_th]:text-zinc-500 dark:[&_th]:bg-zinc-800/60 dark:[&_th]:text-zinc-400 [&_tbody_tr]:border-t [&_tbody_tr]:border-zinc-100 dark:[&_tbody_tr]:border-zinc-800 [&_tbody_tr:hover]:bg-orange-50/50 dark:[&_tbody_tr:hover]:bg-orange-500/5";
 
-// A ```chart block (see lib/chartSpec.ts) is drawn as a chart; if its JSON is invalid it falls back to a plain code block.
-const PAGE_COMPONENTS: Components = {
-  pre: ({ children }) => {
-    const child = Children.toArray(children)[0];
-    if (isValidElement<{ className?: string; children?: React.ReactNode }>(child) && child.props.className?.split(" ").includes(`language-${CHART_LANG}`)) {
-      const spec = parseChartSpec(String(child.props.children ?? ""));
-      if (spec) {
-        return <div className="my-3 text-zinc-500 dark:text-zinc-400" dangerouslySetInnerHTML={{ __html: chartToSvg(spec) }} />;
-      }
-    }
-    return <pre>{children}</pre>;
-  },
-  // Video and audio are stored as images whose description starts with the kind (see lib/media.ts).
-  img: ({ src, alt }) => {
-    if (typeof src !== "string") return null;
-    const media = parseMediaAlt(alt);
-    if (media?.kind === "video") return <video src={src} controls preload="metadata" className="my-3 w-full max-w-2xl rounded-xl bg-black" />;
-    if (media?.kind === "audio") return <audio src={src} controls preload="metadata" className="my-3 w-full max-w-xl" />;
-    return <ImageFigure src={src} alt={alt ?? ""} />;
-  },
+const CALLOUT_TONES: Record<CalloutType, string> = {
+  info: "border-sky-200 bg-sky-50 dark:border-sky-500/30 dark:bg-sky-500/10",
+  tip: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
+  warning: "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
+  danger: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
 };
 
-const CHAT_COMPONENTS: Components = {
-  ...PAGE_COMPONENTS,
+function textOf(node: React.ReactNode): string {
+  if (typeof node === "string" || typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join("");
+  if (isValidElement<{ children?: React.ReactNode }>(node)) return textOf(node.props.children);
+  return "";
+}
+
+// Chart, Mermaid, callout, toggle, embed and [TOC] blocks are all plain Markdown underneath (see lib/chartSpec.ts and
+// lib/alerts.ts); here they get drawn. Anything that doesn't parse falls back to the ordinary element.
+function pageComponents(content: string): Components {
+  const used = new Map<string, number>();
+  const heading = (Tag: "h1" | "h2" | "h3") => {
+    const H = ({ children }: { children?: React.ReactNode }) => <Tag id={headingId(textOf(children), used)}>{children}</Tag>;
+    return H;
+  };
+  const toc = markdownHeadings(content);
+
+  return {
+    h1: heading("h1"),
+    h2: heading("h2"),
+    h3: heading("h3"),
+    pre: ({ children }) => {
+      const child = Children.toArray(children)[0];
+      if (isValidElement<{ className?: string; children?: React.ReactNode }>(child)) {
+        const classes = child.props.className?.split(" ") ?? [];
+        if (classes.includes(`language-${CHART_LANG}`)) {
+          const spec = parseChartSpec(String(child.props.children ?? ""));
+          if (spec) return <div className="my-3 text-zinc-500 dark:text-zinc-400" dangerouslySetInnerHTML={{ __html: chartToSvg(spec) }} />;
+        }
+        if (classes.includes("language-mermaid")) return <MermaidView code={String(child.props.children ?? "")} />;
+      }
+      return <pre>{children}</pre>;
+    },
+    // Video, audio and embeds are stored as images whose description names the kind (see lib/media.ts, lib/embed.ts).
+    img: ({ src, alt }) => {
+      if (typeof src !== "string") return null;
+      if (alt === EMBED_ALT) {
+        const info = embedSource(src);
+        if (info) {
+          return (
+            <div className="my-3 max-w-2xl overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-700" style={{ aspectRatio: info.ratio }}>
+              <iframe src={info.src} title="Embedded content" className="h-full w-full" loading="lazy" referrerPolicy="no-referrer" sandbox="allow-scripts allow-same-origin allow-presentation allow-popups" />
+            </div>
+          );
+        }
+      }
+      const media = parseMediaAlt(alt);
+      if (media?.kind === "video") return <video src={src} controls preload="metadata" className="my-3 w-full max-w-2xl rounded-xl bg-black" />;
+      if (media?.kind === "audio") return <audio src={src} controls preload="metadata" className="my-3 w-full max-w-xl" />;
+      return <ImageFigure src={src} alt={alt ?? ""} />;
+    },
+    p: ({ children }) => {
+      if (textOf(children).trim().toUpperCase() === TOC_MARKER) {
+        if (toc.length === 0) return null;
+        return (
+          <nav className="my-3 rounded-lg border border-zinc-200 px-4 py-3 text-sm dark:border-zinc-700" aria-label="Table of contents">
+            {toc.map((h) => (
+              <a key={h.id} href={`#${h.id}`} className="block py-0.5 text-zinc-600 no-underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100" style={{ paddingLeft: (h.level - 1) * 16 }}>
+                {h.text}
+              </a>
+            ))}
+          </nav>
+        );
+      }
+      return <p>{children}</p>;
+    },
+    blockquote: ({ children }) => {
+      const kids = Children.toArray(children).filter((c) => !(typeof c === "string" && !c.trim()));
+      const first = kids[0];
+      if (isValidElement<{ children?: React.ReactNode }>(first)) {
+        const parts = Children.toArray(first.props.children);
+        const info = typeof parts[0] === "string" ? parseAlertMarker(parts[0]) : null;
+        if (info) {
+          const lead = [info.rest, ...parts.slice(1)];
+          const leadText = lead.map(textOf).join("").trim();
+          const rest = kids.slice(1);
+          if (info.kind === "toggle") {
+            return (
+              <details className="my-2 rounded-lg border border-zinc-200 px-3 py-2 dark:border-zinc-700">
+                <summary className="cursor-pointer font-medium text-zinc-900 dark:text-zinc-100">{leadText || "Details"}</summary>
+                <div className="mt-2">{rest}</div>
+              </details>
+            );
+          }
+          return (
+            <div className={`my-3 flex gap-3 rounded-lg border px-4 py-3 ${CALLOUT_TONES[info.type]}`}>
+              <span aria-hidden className="select-none">
+                {CALLOUT_META[info.type].emoji}
+              </span>
+              <div className="min-w-0 flex-1 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
+                {leadText && <p>{lead}</p>}
+                {rest}
+              </div>
+            </div>
+          );
+        }
+      }
+      return <blockquote>{children}</blockquote>;
+    },
+  };
+}
+
+const chatComponents = (content: string): Components => ({
+  ...pageComponents(content),
   // Scrolls sideways inside its own frame, and gets a search box and pages once it is long (see ChatTable).
   table: ({ children }) => <ChatTable>{children}</ChatTable>,
   // Links to pages in this app navigate without a reload; anything else opens in a new tab.
@@ -87,7 +177,7 @@ const CHAT_COMPONENTS: Components = {
         {children}
       </a>
     ),
-};
+});
 
 export function MarkdownView({
   content,
@@ -99,7 +189,7 @@ export function MarkdownView({
   if (variant === "chat") {
     return (
       <div className={`${CHAT_BASE} ${CHAT_TABLE_CLASSES}`}>
-        <ReactMarkdown remarkPlugins={[remarkGfm]} components={CHAT_COMPONENTS}>
+        <ReactMarkdown remarkPlugins={[remarkGfm]} components={chatComponents(content)}>
           {content}
         </ReactMarkdown>
       </div>
@@ -107,7 +197,7 @@ export function MarkdownView({
   }
   return (
     <div className={WRAPPER_CLASSES}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={PAGE_COMPONENTS}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={pageComponents(content)}>
         {content}
       </ReactMarkdown>
     </div>

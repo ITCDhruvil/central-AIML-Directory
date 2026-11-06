@@ -3,6 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Editor } from "@tiptap/react";
 import {
+  Info,
+  Lightbulb,
+  TriangleAlert,
+  OctagonAlert,
+  ChevronRight,
+  ListTree,
+  Play,
+  Workflow,
   AudioLines,
   ImageIcon,
   Video,
@@ -45,6 +53,7 @@ import {
 import { createNodeFromContent } from "@tiptap/core";
 import { Fragment, Slice, type Node as PMNode } from "@tiptap/pm/model";
 import { Loader } from "@/components/prompt-kit/loader";
+import { insertBlock, type BlockKind } from "@/components/ui/blockInsert";
 import { duplicateRow, exportCsv, fitAllColumns, moveRow, sortByColumn } from "@/components/ui/tableOps";
 import { CHART_LANG, parseChartSpec, serializeChartSpec, specFromColumns, tableToChartSpec, type ChartSpec, type ChartType } from "@/lib/chartSpec";
 import { ghostTextKey } from "@/components/ui/GhostText";
@@ -66,6 +75,15 @@ const BASE_COMMANDS: Command[] = [
   { id: "media-image", label: "Image", hint: "Upload or link an image", icon: ImageIcon, run: "media:image" },
   { id: "media-video", label: "Video", hint: "Upload or link a video", icon: Video, run: "media:video" },
   { id: "media-audio", label: "Audio", hint: "Upload or link an audio clip", icon: AudioLines, run: "media:audio" },
+  { id: "callout-info", label: "Info callout", hint: "A highlighted note box", icon: Info, run: "block:callout:info" },
+  { id: "callout-tip", label: "Tip callout", hint: "A helpful hint box", icon: Lightbulb, run: "block:callout:tip" },
+  { id: "callout-warning", label: "Warning callout", hint: "Something to watch out for", icon: TriangleAlert, run: "block:callout:warning" },
+  { id: "callout-danger", label: "Danger callout", hint: "A critical warning", icon: OctagonAlert, run: "block:callout:danger" },
+  { id: "toggle", label: "Toggle section", hint: "A collapsible section", icon: ChevronRight, run: "block:toggle" },
+  { id: "toc", label: "Table of contents", hint: "List this note's headings", icon: ListTree, run: "block:toc" },
+  { id: "embed", label: "Embed", hint: "YouTube, Vimeo, Loom or Figma", icon: Play, run: "block:embed" },
+  { id: "diagram-ai", label: "Diagram with AI", hint: "Describe it; AI draws the flowchart", icon: Workflow, run: "prompt-diagram" },
+  { id: "diagram", label: "Diagram", hint: "A Mermaid flowchart", icon: Workflow, run: "block:mermaid" },
   { id: "chart-bar", label: "Table \u2192 Bar chart", hint: "Turn the nearest table into a bar chart", icon: ChartColumn, run: "chart:bar" },
   { id: "chart-auto", label: "Table → Chart with AI", hint: "AI picks the best chart for the nearest table", icon: Sparkles, run: "chart:ai" },
   { id: "chart-line", label: "Table \u2192 Line chart", hint: "Turn the nearest table into a line chart", icon: ChartLine, run: "chart:line" },
@@ -93,7 +111,7 @@ const TEMPLATES: Record<string, string> = {
 const ASK_COMMAND: Command = { id: "ask", label: "Ask the docs", hint: "Answer from this project's documents", icon: BookOpen, run: "prompt-ask" };
 
 type Pos = { top: number; left: number };
-type Prompt = { kind: "write" | "ask" | "table" | "chart" | "edit"; at?: { from: number; to: number } } & Pos;
+type Prompt = { kind: "write" | "ask" | "table" | "chart" | "edit" | "diagram"; at?: { from: number; to: number } } & Pos;
 
 function caretPos(editor: Editor): Pos {
   const { from } = editor.state.selection;
@@ -461,6 +479,24 @@ export function EditorAiCommands({
     return () => document.removeEventListener("mousedown", onDown);
   }, [prompt, running]);
 
+  // Other parts of the editor can open the diagram prompt or ask for a message to be shown.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onPrompt = (e: Event) => {
+      const kind = (e as CustomEvent<{ kind: Prompt["kind"] }>).detail?.kind;
+      if (kind !== "diagram") return;
+      setPromptValue("");
+      setPrompt({ kind, ...caretPos(editor) });
+    };
+    const onError = (e: Event) => setError(String((e as CustomEvent<string>).detail ?? "Something went wrong."));
+    dom.addEventListener("open-ai-prompt", onPrompt);
+    dom.addEventListener("editor-error", onError);
+    return () => {
+      dom.removeEventListener("open-ai-prompt", onPrompt);
+      dom.removeEventListener("editor-error", onError);
+    };
+  }, [editor]);
+
   // "Ask AI to edit" in the block menu opens the prompt box for that block.
   useEffect(() => {
     const dom = editor.view.dom;
@@ -599,9 +635,16 @@ export function EditorAiCommands({
     } else if (cmd.run === "prompt-table") {
       setPromptValue("");
       setPrompt({ kind: "table", ...pos });
+    } else if (cmd.run === "prompt-diagram") {
+      setPromptValue("");
+      setPrompt({ kind: "diagram", ...pos });
     } else if (cmd.run === "prompt-chart") {
       setPromptValue("");
       setPrompt({ kind: "chart", ...pos });
+    } else if (cmd.run.startsWith("block:")) {
+      const kind = cmd.run.slice(6);
+      if (kind === "embed") editor.view.dom.dispatchEvent(new CustomEvent("open-embed"));
+      else insertBlock(editor, kind as BlockKind);
     } else if (cmd.run.startsWith("media:")) {
       editor.view.dom.dispatchEvent(new CustomEvent("open-media", { detail: { kind: cmd.run.slice(6) } }));
     } else if (cmd.run === "chart:ai") {
@@ -662,6 +705,27 @@ export function EditorAiCommands({
           const spec = parseChartSpec(String(body.text ?? "").replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/, ""));
           if (spec) appendMarkdown("```" + CHART_LANG + "\n" + serializeChartSpec(spec) + "\n```");
           else setError("The AI didn't return a usable chart. Try describing the data differently.");
+        }
+      } else if (prompt.kind === "diagram") {
+        const res = await fetch("/api/ai/compose", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            action: "write",
+            prompt:
+              `Draw a diagram for: ${value}.\n` +
+              "Return ONLY valid Mermaid code (no ``` fences, no explanation). Pick the best type: flowchart (graph TD), sequenceDiagram, or erDiagram. " +
+              "Keep node text short, wrap any label that has spaces or punctuation in [square brackets] or double quotes, and use plain ASCII.",
+            text: "",
+          }),
+        });
+        const body = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          setError(body.error ?? "The AI tool is unavailable.");
+        } else {
+          const code = String(body.text ?? "").replace(/^\s*```(?:mermaid)?\s*/i, "").replace(/\s*```\s*$/, "").trim();
+          if (code) editor.chain().focus().insertContent({ type: "codeBlock", attrs: { language: "mermaid" }, content: [{ type: "text", text: code }] }).run();
+          else setError("The AI didn't return a diagram. Try describing it differently.");
         }
       } else if (prompt.kind === "edit" && prompt.at) {
         const node = editor.state.doc.nodeAt(prompt.at.from);
@@ -766,7 +830,9 @@ export function EditorAiCommands({
   const promptPlaceholder =
     prompt?.kind === "ask"
       ? "Ask about this project's documents…"
-      : prompt?.kind === "edit"
+      : prompt?.kind === "diagram"
+        ? "Describe the diagram, e.g. login flow with password reset"
+        : prompt?.kind === "edit"
         ? "Edit with AI — e.g. make it shorter, add a row, translate"
         : prompt?.at
           ? "Ask AI to write anything…"

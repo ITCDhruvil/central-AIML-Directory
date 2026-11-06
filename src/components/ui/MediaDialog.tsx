@@ -252,7 +252,7 @@ export function MediaDialog({ editor, initialKind, onClose }: { editor: Editor; 
                   onChange={(e) => setLink(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && applyLink()}
                   placeholder="https://…"
-                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-zinc-700"
+                  className="min-w-0 flex-1 rounded-lg border border-zinc-300 bg-transparent px-3 py-2 text-sm outline-none focus:border-orange-400 dark:border-zinc-700 text-zinc-900 placeholder:text-zinc-400 dark:text-zinc-100 dark:placeholder:text-zinc-500"
                 />
                 <button type="button" onClick={applyLink} className="rounded-lg border border-zinc-300 px-3 text-sm font-medium hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
                   Preview
