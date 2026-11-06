@@ -71,7 +71,7 @@ export const ChartPreview = Extension.create({
                     }
                     if (afterTable) {
                       actions.appendChild(
-                        button("✨ Update from table", () => {
+                        button("Update from table", () => {
                           view.dom.dispatchEvent(new CustomEvent("chart-ai", { detail: { pos: nodePos() } }));
                         }),
                       );

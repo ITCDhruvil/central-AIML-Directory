@@ -5,7 +5,8 @@ import { chartToSvg, CHART_LANG, parseChartSpec } from "@/lib/chartSpec";
 import { ImageFigure } from "@/components/ImageFigure";
 import { parseMediaAlt } from "@/lib/media";
 import { MermaidView } from "@/components/MermaidView";
-import { CALLOUT_META, headingId, markdownHeadings, parseAlertMarker, TOC_MARKER, type CalloutType } from "@/lib/alerts";
+import { Info, Lightbulb, OctagonAlert, TriangleAlert, type LucideIcon } from "lucide-react";
+import { headingId, markdownHeadings, parseAlertMarker, TOC_MARKER, type CalloutType } from "@/lib/alerts";
 import { embedSource, EMBED_ALT } from "@/lib/embed";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -50,6 +51,13 @@ const CALLOUT_TONES: Record<CalloutType, string> = {
   tip: "border-emerald-200 bg-emerald-50 dark:border-emerald-500/30 dark:bg-emerald-500/10",
   warning: "border-amber-200 bg-amber-50 dark:border-amber-500/30 dark:bg-amber-500/10",
   danger: "border-red-200 bg-red-50 dark:border-red-500/30 dark:bg-red-500/10",
+};
+
+const CALLOUT_ICONS: Record<CalloutType, { icon: LucideIcon; color: string }> = {
+  info: { icon: Info, color: "text-sky-500" },
+  tip: { icon: Lightbulb, color: "text-emerald-500" },
+  warning: { icon: TriangleAlert, color: "text-amber-500" },
+  danger: { icon: OctagonAlert, color: "text-red-500" },
 };
 
 function textOf(node: React.ReactNode): string {
@@ -138,9 +146,10 @@ function pageComponents(content: string): Components {
           }
           return (
             <div className={`my-3 flex gap-3 rounded-lg border px-4 py-3 ${CALLOUT_TONES[info.type]}`}>
-              <span aria-hidden className="select-none">
-                {CALLOUT_META[info.type].emoji}
-              </span>
+              {(() => {
+                const { icon: CalloutIcon, color } = CALLOUT_ICONS[info.type];
+                return <CalloutIcon aria-hidden size={18} className={`mt-0.5 shrink-0 ${color}`} />;
+              })()}
               <div className="min-w-0 flex-1 [&>p:first-child]:mt-0 [&>p:last-child]:mb-0">
                 {leadText && <p>{lead}</p>}
                 {rest}

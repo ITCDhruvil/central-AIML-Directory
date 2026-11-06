@@ -7,11 +7,11 @@
 export const CALLOUT_TYPES = ["info", "tip", "warning", "danger"] as const;
 export type CalloutType = (typeof CALLOUT_TYPES)[number];
 
-export const CALLOUT_META: Record<CalloutType, { label: string; emoji: string }> = {
-  info: { label: "Info", emoji: "ℹ️" },
-  tip: { label: "Tip", emoji: "💡" },
-  warning: { label: "Warning", emoji: "⚠️" },
-  danger: { label: "Danger", emoji: "🛑" },
+export const CALLOUT_META: Record<CalloutType, { label: string }> = {
+  info: { label: "Info" },
+  tip: { label: "Tip" },
+  warning: { label: "Warning" },
+  danger: { label: "Danger" },
 };
 
 export type AlertMarker = { kind: "callout"; type: CalloutType; rest: string } | { kind: "toggle"; rest: string };
