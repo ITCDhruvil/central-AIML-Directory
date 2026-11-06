@@ -815,3 +815,11 @@ ul.contains-task-list > li.task-list-item > input[type="checkbox"] {
   }
   .dark .hl { --hl-bg: oklch(from var(--c) clamp(0.78, l, 0.92) c h); }
 }
+
+/* A table frame shrinks to its columns only when EVERY column has a fixed width (all fitted or dragged). While some
+   columns are still unsized the frame keeps the full width, so those columns share the free space instead of
+   collapsing to slivers. */
+.ProseMirror .tableWrapper:has([colwidth]):not(:has(td:not([colwidth]), th:not([colwidth]))) {
+  width: fit-content;
+  max-width: 100%;
+}

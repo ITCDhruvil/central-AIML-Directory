@@ -112,8 +112,6 @@ const EDITOR_CLASSES = [
   "[&_hr]:my-3 [&_hr]:border-zinc-200 dark:[&_hr]:border-zinc-800",
   // Tables: a soft rounded frame, light row lines, a tinted header, a hover row, and a visible column-drag handle.
   "[&_.tableWrapper]:my-3 [&_.tableWrapper]:overflow-x-auto [&_.tableWrapper]:rounded-xl [&_.tableWrapper]:border [&_.tableWrapper]:border-zinc-200 dark:[&_.tableWrapper]:border-zinc-700/70",
-  // Once columns have fixed widths (dragged or fitted) the frame shrinks to the table instead of staying full width.
-  "[&_.tableWrapper:has([colwidth])]:w-fit [&_.tableWrapper:has([colwidth])]:max-w-full",
   "[&_table]:w-full [&_table]:border-separate [&_table]:border-spacing-0 [&_table]:text-left [&_table]:text-sm",
   "[&_th]:relative [&_th]:border-b [&_th]:border-zinc-200 [&_th]:bg-zinc-50 [&_th]:px-3 [&_th]:py-2 [&_th]:text-[13px] [&_th]:font-semibold [&_th]:text-zinc-600 dark:[&_th]:border-zinc-700/70 dark:[&_th]:bg-zinc-800/60 dark:[&_th]:text-zinc-300",
   "[&_td]:relative [&_td]:border-b [&_td]:border-zinc-100 [&_td]:px-3 [&_td]:py-2 dark:[&_td]:border-zinc-800",
